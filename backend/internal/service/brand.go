@@ -22,6 +22,11 @@ type Brand struct {
 	CTAChannel  string `json:"cta_channel,omitempty"`
 }
 
+// StateLocalityKey returns the normalized state key used for competitor locality.
+func (b *Brand) StateLocalityKey() string {
+	return NormalizeStateKey(b.State)
+}
+
 // BrandInput holds the fields for create/update operations at the service layer.
 type BrandInput struct {
 	Niche       string `json:"niche"`
@@ -44,12 +49,13 @@ func NewBrandService(db *pgxpool.Pool) *BrandService {
 
 // Create inserts a new brand for the given user.
 func (s *BrandService) Create(ctx context.Context, userID string, input BrandInput) (*Brand, error) {
+	stateKey := NormalizeStateKey(input.State)
 	brand := &Brand{
 		ID:          "generated-uuid", // TODO: use gen_random_uuid() via SQL
 		UserID:      userID,
 		Niche:       input.Niche,
 		City:        input.City,
-		State:       input.State,
+		State:       stateKey,
 		ToneOfVoice: input.ToneOfVoice,
 		ToneCustom:  input.ToneCustom,
 		CTAChannel:  input.CTAChannel,
@@ -63,7 +69,7 @@ func (s *BrandService) Create(ctx context.Context, userID string, input BrandInp
 		`INSERT INTO brands (user_id, niche, city, state, tone_of_voice, tone_custom, cta_channel)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 RETURNING id, user_id, niche, city, state, tone_of_voice, tone_custom, cta_channel`,
-		userID, input.Niche, input.City, input.State, input.ToneOfVoice, input.ToneCustom, input.CTAChannel,
+		userID, input.Niche, input.City, stateKey, input.ToneOfVoice, input.ToneCustom, input.CTAChannel,
 	)
 	return brand, row.Scan(&brand.ID, &brand.UserID, &brand.Niche, &brand.City, &brand.State,
 		&brand.ToneOfVoice, &brand.ToneCustom, &brand.CTAChannel)
@@ -90,11 +96,12 @@ func (s *BrandService) GetByUserID(ctx context.Context, userID string) (*Brand, 
 
 // Update modifies the brand belonging to the given user.
 func (s *BrandService) Update(ctx context.Context, userID string, input BrandInput) (*Brand, error) {
+	stateKey := NormalizeStateKey(input.State)
 	brand := &Brand{
 		UserID:      userID,
 		Niche:       input.Niche,
 		City:        input.City,
-		State:       input.State,
+		State:       stateKey,
 		ToneOfVoice: input.ToneOfVoice,
 		ToneCustom:  input.ToneCustom,
 		CTAChannel:  input.CTAChannel,
@@ -108,7 +115,7 @@ func (s *BrandService) Update(ctx context.Context, userID string, input BrandInp
 		`UPDATE brands SET niche=$2, city=$3, state=$4, tone_of_voice=$5, tone_custom=$6, cta_channel=$7
 		 WHERE user_id=$1
 		 RETURNING id, user_id, niche, city, state, tone_of_voice, tone_custom, cta_channel`,
-		userID, input.Niche, input.City, input.State, input.ToneOfVoice, input.ToneCustom, input.CTAChannel,
+		userID, input.Niche, input.City, stateKey, input.ToneOfVoice, input.ToneCustom, input.CTAChannel,
 	).Scan(&brand.ID, &brand.UserID, &brand.Niche, &brand.City, &brand.State,
 		&brand.ToneOfVoice, &brand.ToneCustom, &brand.CTAChannel)
 	if err != nil {

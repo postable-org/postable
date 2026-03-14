@@ -11,7 +11,8 @@ import (
 
 var tokenAuth *jwtauth.JWTAuth
 
-func init() {
+// Init initializes the JWT middleware. Must be called after environment variables are loaded.
+func Init() {
 	secret := os.Getenv("SUPABASE_JWT_SECRET")
 	if secret == "" {
 		slog.Warn("SUPABASE_JWT_SECRET is not set — JWT verification will fail")
@@ -22,6 +23,7 @@ func init() {
 }
 
 // Verifier returns the JWT verifier middleware for chi.
+// Checks Authorization header and cookie only — no query param extraction.
 func Verifier() func(http.Handler) http.Handler {
 	return jwtauth.Verifier(tokenAuth)
 }

@@ -19,11 +19,14 @@ import (
 
 // MockBrandService is a test double for the handler.BrandServiceInterface.
 type MockBrandService struct {
-	brand *service.Brand
-	err   error
+	brand           *service.Brand
+	err             error
+	lastCreateInput service.BrandInput
+	lastUpdateInput service.BrandInput
 }
 
 func (m *MockBrandService) Create(ctx context.Context, userID string, input service.BrandInput) (*service.Brand, error) {
+	m.lastCreateInput = input
 	if m.brand != nil {
 		return m.brand, nil
 	}
@@ -39,6 +42,7 @@ func (m *MockBrandService) GetByUserID(ctx context.Context, userID string) (*ser
 }
 
 func (m *MockBrandService) Update(ctx context.Context, userID string, input service.BrandInput) (*service.Brand, error) {
+	m.lastUpdateInput = input
 	if m.brand != nil {
 		return m.brand, nil
 	}
@@ -152,5 +156,47 @@ func TestGetBrand_NotFound(t *testing.T) {
 
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d (body: %s)", rr.Code, rr.Body.String())
+	}
+}
+
+func TestCreateBrand_NormalizesStateLocalityKey(t *testing.T) {
+	svc := &MockBrandService{}
+	router := buildBrandRouter(svc)
+
+	token := makeTestJWT(t, "user-abc")
+	body := bytes.NewBufferString(`{"niche":"restaurant","city":"Austin","state":"sp","tone_of_voice":"friendly"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/brands", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d (body: %s)", rr.Code, rr.Body.String())
+	}
+	if svc.lastCreateInput.State != "SP" {
+		t.Fatalf("expected normalized state key SP, got %q", svc.lastCreateInput.State)
+	}
+}
+
+func TestUpdateBrand_NormalizesStateLocalityKey(t *testing.T) {
+	svc := &MockBrandService{}
+	router := buildBrandRouter(svc)
+
+	token := makeTestJWT(t, "user-abc")
+	body := bytes.NewBufferString(`{"niche":"restaurant","city":"Austin","state":"rj","tone_of_voice":"friendly"}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/brands", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (body: %s)", rr.Code, rr.Body.String())
+	}
+	if svc.lastUpdateInput.State != "RJ" {
+		t.Fatalf("expected normalized state key RJ, got %q", svc.lastUpdateInput.State)
 	}
 }

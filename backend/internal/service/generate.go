@@ -36,15 +36,26 @@ func NewGenerateService() *GenerateService {
 // and writes SSE events to the provided writer.
 // It respects ctx cancellation (client disconnect) and sends heartbeats every 15 seconds.
 func (s *GenerateService) Stream(ctx context.Context, brandJSON string, w http.ResponseWriter) {
+	s.StreamAndReturn(ctx, brandJSON, w)
+}
+
+// StreamAndReturn streams SSE events to w and returns the final response JSON
+// (the last data line from the Python agent, which is the GenerateResponse JSON).
+// Returns nil responseJSON on error or client disconnect.
+func (s *GenerateService) StreamAndReturn(ctx context.Context, brandJSON string, w http.ResponseWriter) (responseJSON []byte, err error) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("streaming not supported")
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+
+	// Emit explicit stage visibility before content generation completes.
+	fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"competitor-analysis\",\"status\":\"started\"}\n\n")
+	flusher.Flush()
 
 	messageChan := make(chan string, 32)
 	errChan := make(chan error, 1)
@@ -91,22 +102,33 @@ func (s *GenerateService) Stream(ctx context.Context, brandJSON string, w http.R
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
+	var fullDataPayload strings.Builder
+
 	for {
 		select {
 		case <-ctx.Done():
 			// Client disconnected — exit goroutine cleanly.
-			return
-		case err := <-errChan:
-			slog.Error("generate stream: python agent error", "error", err)
-			fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
+			return nil, ctx.Err()
+		case agentErr := <-errChan:
+			slog.Error("generate stream: python agent error", "error", agentErr)
+			fmt.Fprintf(w, "event: error\ndata: %s\n\n", agentErr.Error())
 			flusher.Flush()
-			return
+			return nil, agentErr
 		case line, open := <-messageChan:
 			if !open {
+				fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"content-generation\",\"status\":\"complete\"}\n\n")
 				fmt.Fprintf(w, "event: done\ndata: null\n\n")
 				flusher.Flush()
-				return
+				payload := strings.TrimSpace(fullDataPayload.String())
+				if payload != "" {
+					return []byte(payload), nil
+				}
+				return nil, nil
 			}
+			if fullDataPayload.Len() > 0 {
+				fullDataPayload.WriteByte('\n')
+			}
+			fullDataPayload.WriteString(line)
 			fmt.Fprintf(w, "data: %s\n\n", line)
 			flusher.Flush()
 		case <-ticker.C:

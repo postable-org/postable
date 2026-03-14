@@ -64,6 +64,7 @@ func (h *BrandHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
+	input.State = service.NormalizeStateKey(input.State)
 
 	brand, err := h.svc.Create(r.Context(), userID, input)
 	if err != nil {
@@ -115,6 +116,7 @@ func (h *BrandHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
+	input.State = service.NormalizeStateKey(input.State)
 
 	brand, err := h.svc.Update(r.Context(), userID, input)
 	if err != nil {
