@@ -1,18 +1,22 @@
 import type { Metadata } from "next";
-import { DM_Sans, Inter } from "next/font/google";
+import { Syne, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/components/QueryProvider";
 
-const dmSans = DM_Sans({
+/* Display / headings — geometric, modern, distinctive */
+const syne = Syne({
   variable: "--font-sans",
   subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: ["400", "600", "700", "800"],
+  display: "swap",
 });
 
-const inter = Inter({
+/* Body / UI — clean, readable */
+const dmSans = DM_Sans({
   variable: "--font-body",
   subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -27,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${dmSans.variable} ${inter.variable} antialiased`}>
+      <body className={`${syne.variable} ${dmSans.variable} antialiased`}>
         <QueryProvider>{children}</QueryProvider>
       </body>
     </html>

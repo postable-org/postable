@@ -1,52 +1,79 @@
-'use client';
+"use client";
 
-import { useSSEGenerate } from '@/lib/hooks/useSSEGenerate';
-import type { PostContent } from '@/lib/api/posts';
-import { Button } from '@/components/ui/button';
+import { useSSEGenerate } from "@/lib/hooks/useSSEGenerate";
+import type { PostContent } from "@/lib/api/posts";
+import { Sparkles, RotateCcw } from "lucide-react";
 
 interface GenerateButtonProps {
   onGenerated: (content: PostContent) => void;
   triggerRef?: React.MutableRefObject<(() => void) | null>;
+  dark?: boolean;
 }
 
-export function GenerateButton({ onGenerated, triggerRef }: GenerateButtonProps) {
+export function GenerateButton({
+  onGenerated,
+  triggerRef,
+  dark,
+}: GenerateButtonProps) {
   const { status, messages, error, start, reset } = useSSEGenerate(onGenerated);
 
-  // Expose start() via triggerRef so parent can trigger programmatically (for regenerate)
   if (triggerRef) {
     triggerRef.current = start;
   }
 
-  const isActive = status === 'connecting' || status === 'streaming';
-  const latestMessage = messages[messages.length - 1] ?? '';
+  const isActive = status === "connecting" || status === "streaming";
+  const latestMessage = messages[messages.length - 1] ?? "";
 
-  if (status === 'error') {
+  if (status === "error") {
     return (
-      <div className="flex flex-col gap-2">
-        <p className="text-sm text-destructive">{error ?? 'Erro ao gerar post. Tente novamente.'}</p>
-        <Button variant="outline" onClick={reset}>
-          Tentar novamente
-        </Button>
-      </div>
+      <button
+        onClick={reset}
+        className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium transition-all"
+        style={{
+          backgroundColor: dark ? "rgba(248,245,239,0.1)" : "#f0ede7",
+          color: dark ? "#f8f5ef" : "#0a0a0a",
+          fontFamily: "var(--font-body)",
+          border: dark ? "1px solid rgba(248,245,239,0.15)" : "1.5px solid #e4e0d8",
+        }}
+      >
+        <RotateCcw size={14} strokeWidth={2} />
+        Tentar novamente
+      </button>
     );
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <Button
-        onClick={start}
-        disabled={isActive}
-        className="min-w-[160px]"
-      >
-        {isActive ? (
-          <span className="flex items-center gap-2">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            {latestMessage || 'Gerando...'}
+    <button
+      onClick={start}
+      disabled={isActive}
+      className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-60 whitespace-nowrap"
+      style={{
+        backgroundColor: dark ? "#f8f5ef" : "#0a0a0a",
+        color: dark ? "#0a0a0a" : "#f8f5ef",
+        fontFamily: "var(--font-body)",
+        minWidth: "160px",
+        justifyContent: "center",
+      }}
+    >
+      {isActive ? (
+        <>
+          <div
+            className="w-4 h-4 border-2 rounded-full animate-spin shrink-0"
+            style={{
+              borderColor: dark ? "rgba(10,10,10,0.2)" : "rgba(248,245,239,0.25)",
+              borderTopColor: dark ? "#0a0a0a" : "#f8f5ef",
+            }}
+          />
+          <span className="truncate max-w-[120px]">
+            {latestMessage || "Gerando..."}
           </span>
-        ) : (
-          'Gerar Novo Post'
-        )}
-      </Button>
-    </div>
+        </>
+      ) : (
+        <>
+          <Sparkles size={14} strokeWidth={2} />
+          Gerar novo post
+        </>
+      )}
+    </button>
   );
 }

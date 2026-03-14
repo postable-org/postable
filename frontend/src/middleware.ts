@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
+const PROTECTED = ['/dashboard', '/brand-setup', '/posts', '/campaigns', '/context'];
+const AUTH_ONLY = ['/login', '/signup'];
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -25,18 +28,20 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getSession();
   const isAuth = !!session;
 
+  const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
+  const isAuthOnly = AUTH_ONLY.some((p) => pathname.startsWith(p));
+
   // Redirect authenticated users away from auth pages
-  if (isAuth && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
+  if (isAuth && isAuthOnly) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // Protect /dashboard and /brand-setup — require auth
-  if (!isAuth && (pathname.startsWith('/dashboard') || pathname.startsWith('/brand-setup'))) {
+  // Protect app routes — require auth
+  if (!isAuth && isProtected) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // Brand setup guard — authenticated users accessing /dashboard must have a brand profile
-  // If no brand: redirect to /brand-setup (best-effort: allow through if check fails)
   if (isAuth && pathname.startsWith('/dashboard') && session?.access_token) {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
@@ -51,7 +56,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/brand-setup', request.url));
       }
     } catch {
-      // Best-effort: if the check fails (network error, timeout), allow through
+      // Best-effort: allow through if check fails (network error, timeout)
     }
   }
 
@@ -59,5 +64,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
+  // Exclude static assets, Next.js internals, API routes, and the auth callback
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|auth).*)'],
 };
