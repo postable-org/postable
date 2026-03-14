@@ -1,8 +1,9 @@
 "use client";
 
-import { useSSEGenerate } from "@/lib/hooks/useSSEGenerate";
 import type { PostContent } from "@/lib/api/posts";
-import { Sparkles, RotateCcw } from "lucide-react";
+import { useSSEGenerate } from "@/lib/hooks/useSSEGenerate";
+import { RotateCcw, Sparkles } from "lucide-react";
+import { useEffect } from "react";
 
 interface GenerateButtonProps {
   onGenerated: (content: PostContent) => void;
@@ -15,11 +16,13 @@ export function GenerateButton({
   triggerRef,
   dark,
 }: GenerateButtonProps) {
-  const { status, messages, error, start, reset } = useSSEGenerate(onGenerated);
+  const { status, messages, start, reset } = useSSEGenerate(onGenerated);
 
-  if (triggerRef) {
-    triggerRef.current = start;
-  }
+  useEffect(() => {
+    if (triggerRef) {
+      triggerRef.current = start;
+    }
+  }, [start, triggerRef]);
 
   const isActive = status === "connecting" || status === "streaming";
   const latestMessage = messages[messages.length - 1] ?? "";
@@ -33,7 +36,9 @@ export function GenerateButton({
           backgroundColor: dark ? "rgba(248,245,239,0.1)" : "#f0ede7",
           color: dark ? "#f8f5ef" : "#0a0a0a",
           fontFamily: "var(--font-body)",
-          border: dark ? "1px solid rgba(248,245,239,0.15)" : "1.5px solid #e4e0d8",
+          border: dark
+            ? "1px solid rgba(248,245,239,0.15)"
+            : "1.5px solid #e4e0d8",
         }}
       >
         <RotateCcw size={14} strokeWidth={2} />
@@ -60,7 +65,9 @@ export function GenerateButton({
           <div
             className="w-4 h-4 border-2 rounded-full animate-spin shrink-0"
             style={{
-              borderColor: dark ? "rgba(10,10,10,0.2)" : "rgba(248,245,239,0.25)",
+              borderColor: dark
+                ? "rgba(10,10,10,0.2)"
+                : "rgba(248,245,239,0.25)",
               borderTopColor: dark ? "#0a0a0a" : "#f8f5ef",
             }}
           />

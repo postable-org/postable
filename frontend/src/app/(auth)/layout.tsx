@@ -91,20 +91,30 @@ export default function AuthLayout({
           >
             <div
               className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-              style={{ backgroundColor: "rgba(166,200,249,0.15)", color: "#a6c8f9" }}
+              style={{
+                backgroundColor: "rgba(166,200,249,0.15)",
+                color: "#a6c8f9",
+              }}
             >
               M
             </div>
             <div>
               <p
                 className="text-xs leading-relaxed"
-                style={{ color: "rgba(248,245,239,0.6)", fontFamily: "var(--font-body)" }}
+                style={{
+                  color: "rgba(248,245,239,0.6)",
+                  fontFamily: "var(--font-body)",
+                }}
               >
-                "Economizamos horas toda semana. Os posts geram mais engajamento do que nunca."
+                &quot;Economizamos horas toda semana. Os posts geram mais
+                engajamento do que nunca.&quot;
               </p>
               <p
                 className="text-xs mt-0.5 font-medium"
-                style={{ color: "rgba(248,245,239,0.3)", fontFamily: "var(--font-body)" }}
+                style={{
+                  color: "rgba(248,245,239,0.3)",
+                  fontFamily: "var(--font-body)",
+                }}
               >
                 Marina S. — Studio de Pilates, SP
               </p>

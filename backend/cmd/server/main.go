@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -88,6 +89,14 @@ func main() {
 	competitorSvc := service.NewCompetitorService(dbPool)
 	postSvc := service.NewPostService(dbPool)
 	generateSvc := service.NewGenerateService()
+	socialSvc := service.NewSocialService(dbPool, nil)
+	socialOAuthSvc := service.NewSocialOAuthService(socialSvc)
+	socialOAuthHandler := handler.NewSocialOAuthHandler(socialOAuthSvc)
+	r.Get("/api/social/oauth/{network}/callback", socialOAuthHandler.Callback)
+
+	if dbPool != nil {
+		go service.StartSocialScheduler(context.Background(), socialSvc, 15*time.Second, 20)
+	}
 
 	// Authenticated routes
 	r.Group(func(r chi.Router) {
@@ -108,6 +117,14 @@ func main() {
 		r.Get("/api/posts", postHandler.List)
 		r.Get("/api/posts/{id}/insights", postHandler.GetPostInsights)
 		r.Patch("/api/posts/{id}/status", postHandler.UpdateStatus)
+
+		socialHandler := handler.NewSocialHandler(socialSvc)
+		r.Get("/api/social/oauth/{network}/start", socialOAuthHandler.Start)
+		r.Get("/api/social/connections", socialHandler.ListConnections)
+		r.Post("/api/social/connections", socialHandler.UpsertConnection)
+		r.Post("/api/social/publish", socialHandler.Publish)
+		r.Get("/api/social/jobs", socialHandler.ListJobs)
+		r.Post("/api/social/jobs/run-due", socialHandler.RunDueJobs)
 
 		generateHandler := handler.NewGenerateHandler(generateSvc, brandSvc, postSvc, competitorSvc)
 		r.Get("/api/generate", generateHandler.Generate)
