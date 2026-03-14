@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 )
 
@@ -27,21 +28,25 @@ func NewGenerateHandler(svc GenerateServiceInterface, brandSvc BrandServiceInter
 func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	userID, ok := getUserID(r)
 	if !ok {
+		slog.Warn("generate: unauthorized")
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
 	brand, err := h.brandSvc.GetByUserID(r.Context(), userID)
 	if err != nil {
+		slog.Info("generate: brand not found", "userID", userID)
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "brand not found — create a brand first"})
 		return
 	}
 
 	brandJSON, err := json.Marshal(brand)
 	if err != nil {
+		slog.Error("generate: failed to marshal brand", "userID", userID, "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to marshal brand"})
 		return
 	}
 
+	slog.Info("generate: starting stream", "userID", userID)
 	h.svc.Stream(r.Context(), string(brandJSON), w)
 }

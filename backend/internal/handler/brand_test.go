@@ -14,34 +14,35 @@ import (
 	"github.com/go-chi/jwtauth/v5"
 
 	"postable/internal/handler"
+	"postable/internal/service"
 )
 
 // MockBrandService is a test double for the handler.BrandServiceInterface.
 type MockBrandService struct {
-	brand *handler.Brand
+	brand *service.Brand
 	err   error
 }
 
-func (m *MockBrandService) Create(ctx context.Context, userID string, input handler.BrandInput) (*handler.Brand, error) {
+func (m *MockBrandService) Create(ctx context.Context, userID string, input service.BrandInput) (*service.Brand, error) {
 	if m.brand != nil {
 		return m.brand, nil
 	}
-	return &handler.Brand{
+	return &service.Brand{
 		ID:     "brand-123",
 		UserID: userID,
 		Niche:  input.Niche,
 	}, m.err
 }
 
-func (m *MockBrandService) GetByUserID(ctx context.Context, userID string) (*handler.Brand, error) {
+func (m *MockBrandService) GetByUserID(ctx context.Context, userID string) (*service.Brand, error) {
 	return m.brand, m.err
 }
 
-func (m *MockBrandService) Update(ctx context.Context, userID string, input handler.BrandInput) (*handler.Brand, error) {
+func (m *MockBrandService) Update(ctx context.Context, userID string, input service.BrandInput) (*service.Brand, error) {
 	if m.brand != nil {
 		return m.brand, nil
 	}
-	return &handler.Brand{
+	return &service.Brand{
 		ID:     "brand-123",
 		UserID: userID,
 		Niche:  input.Niche,

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -12,6 +13,11 @@ var tokenAuth *jwtauth.JWTAuth
 
 func init() {
 	secret := os.Getenv("SUPABASE_JWT_SECRET")
+	if secret == "" {
+		slog.Warn("SUPABASE_JWT_SECRET is not set — JWT verification will fail")
+	} else {
+		slog.Info("JWT middleware initialized")
+	}
 	tokenAuth = jwtauth.New("HS256", []byte(secret), nil)
 }
 

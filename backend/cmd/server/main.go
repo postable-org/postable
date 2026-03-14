@@ -1,11 +1,13 @@
 package main
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 
 	"postable/internal/handler"
 	"postable/internal/middleware"
@@ -13,7 +15,19 @@ import (
 )
 
 func main() {
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOrigins == "" {
+		allowedOrigins = "http://localhost:3001"
+	}
+
 	r := chi.NewRouter()
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{allowedOrigins},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 
@@ -44,5 +58,9 @@ func main() {
 		port = "8080"
 	}
 
-	http.ListenAndServe(":"+port, r)
+	slog.Info("server starting", "port", port)
+	if err := http.ListenAndServe(":"+port, r); err != nil {
+		slog.Error("server failed", "error", err)
+		os.Exit(1)
+	}
 }

@@ -4,41 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/jwtauth/v5"
+
+	"postable/internal/service"
 )
 
 // ErrBrandNotFound is returned when a brand does not exist for the given user.
 var ErrBrandNotFound = errors.New("brand not found")
 
-// Brand represents the brand record returned to clients.
-type Brand struct {
-	ID          string `json:"id"`
-	UserID      string `json:"user_id"`
-	Niche       string `json:"niche"`
-	City        string `json:"city"`
-	State       string `json:"state"`
-	ToneOfVoice string `json:"tone_of_voice"`
-	ToneCustom  string `json:"tone_custom,omitempty"`
-	CTAChannel  string `json:"cta_channel,omitempty"`
-}
-
-// BrandInput holds the request body fields for create/update operations.
-type BrandInput struct {
-	Niche       string `json:"niche"`
-	City        string `json:"city"`
-	State       string `json:"state"`
-	ToneOfVoice string `json:"tone_of_voice"`
-	ToneCustom  string `json:"tone_custom,omitempty"`
-	CTAChannel  string `json:"cta_channel,omitempty"`
-}
-
 // BrandServiceInterface defines the operations needed by the brand handler.
 type BrandServiceInterface interface {
-	Create(ctx context.Context, userID string, input BrandInput) (*Brand, error)
-	GetByUserID(ctx context.Context, userID string) (*Brand, error)
-	Update(ctx context.Context, userID string, input BrandInput) (*Brand, error)
+	Create(ctx context.Context, userID string, input service.BrandInput) (*service.Brand, error)
+	GetByUserID(ctx context.Context, userID string) (*service.Brand, error)
+	Update(ctx context.Context, userID string, input service.BrandInput) (*service.Brand, error)
 }
 
 // BrandHandler handles brand-related HTTP requests.
@@ -72,22 +53,26 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 func (h *BrandHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := getUserID(r)
 	if !ok {
+		slog.Warn("brand create: unauthorized")
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	var input BrandInput
+	var input service.BrandInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		slog.Warn("brand create: invalid request body", "error", err)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
 	brand, err := h.svc.Create(r.Context(), userID, input)
 	if err != nil {
+		slog.Error("brand create: service error", "userID", userID, "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
+	slog.Info("brand created", "userID", userID, "brandID", brand.ID)
 	writeJSON(w, http.StatusCreated, brand)
 }
 
@@ -95,6 +80,7 @@ func (h *BrandHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *BrandHandler) Get(w http.ResponseWriter, r *http.Request) {
 	userID, ok := getUserID(r)
 	if !ok {
+		slog.Warn("brand get: unauthorized")
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
@@ -102,9 +88,11 @@ func (h *BrandHandler) Get(w http.ResponseWriter, r *http.Request) {
 	brand, err := h.svc.GetByUserID(r.Context(), userID)
 	if err != nil {
 		if errors.Is(err, ErrBrandNotFound) {
+			slog.Info("brand get: not found", "userID", userID)
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "brand not found"})
 			return
 		}
+		slog.Error("brand get: service error", "userID", userID, "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -116,12 +104,14 @@ func (h *BrandHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *BrandHandler) Update(w http.ResponseWriter, r *http.Request) {
 	userID, ok := getUserID(r)
 	if !ok {
+		slog.Warn("brand update: unauthorized")
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	var input BrandInput
+	var input service.BrandInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		slog.Warn("brand update: invalid request body", "error", err)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
@@ -129,12 +119,15 @@ func (h *BrandHandler) Update(w http.ResponseWriter, r *http.Request) {
 	brand, err := h.svc.Update(r.Context(), userID, input)
 	if err != nil {
 		if errors.Is(err, ErrBrandNotFound) {
+			slog.Info("brand update: not found", "userID", userID)
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "brand not found"})
 			return
 		}
+		slog.Error("brand update: service error", "userID", userID, "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
+	slog.Info("brand updated", "userID", userID, "brandID", brand.ID)
 	writeJSON(w, http.StatusOK, brand)
 }

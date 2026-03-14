@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -21,6 +22,9 @@ func NewGenerateService() *GenerateService {
 	url := os.Getenv("PYTHON_AGENT_URL")
 	if url == "" {
 		url = "http://localhost:8000"
+		slog.Warn("PYTHON_AGENT_URL not set, using default", "url", url)
+	} else {
+		slog.Info("generate service initialized", "pythonAgentURL", url)
 	}
 	return &GenerateService{
 		pythonAgentURL: url,
@@ -93,6 +97,7 @@ func (s *GenerateService) Stream(ctx context.Context, brandJSON string, w http.R
 			// Client disconnected — exit goroutine cleanly.
 			return
 		case err := <-errChan:
+			slog.Error("generate stream: python agent error", "error", err)
 			fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
 			flusher.Flush()
 			return
