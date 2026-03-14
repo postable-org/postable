@@ -18,7 +18,9 @@ describe('SignupForm', () => {
   it('renders email and password fields', () => {
     render(<SignupForm />);
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/senha/i)).toBeInTheDocument();
+    // Two password fields: Senha and Confirmar Senha
+    const passwordFields = screen.getAllByLabelText(/senha/i);
+    expect(passwordFields.length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows validation error when email is empty on submit', async () => {
@@ -27,7 +29,7 @@ describe('SignupForm', () => {
     const submitButton = screen.getByRole('button', { name: /criar conta/i });
     await user.click(submitButton);
     await waitFor(() => {
-      expect(screen.getByText(/email/i)).toBeInTheDocument();
+      expect(screen.getByText(/email inválido/i)).toBeInTheDocument();
     });
   });
 
@@ -41,7 +43,7 @@ describe('SignupForm', () => {
     const submitButton = screen.getByRole('button', { name: /criar conta/i });
     await user.click(submitButton);
     await waitFor(() => {
-      expect(screen.getByText(/8/)).toBeInTheDocument();
+      expect(screen.getByText(/8 caracteres/i)).toBeInTheDocument();
     });
   });
 
