@@ -30,9 +30,29 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // Protect /dashboard and /brand-setup
+  // Protect /dashboard and /brand-setup — require auth
   if (!isAuth && (pathname.startsWith('/dashboard') || pathname.startsWith('/brand-setup'))) {
     return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // Brand setup guard — authenticated users accessing /dashboard must have a brand profile
+  // If no brand: redirect to /brand-setup (best-effort: allow through if check fails)
+  if (isAuth && pathname.startsWith('/dashboard') && session?.access_token) {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+      const brandRes = await fetch(`${apiUrl}/api/brands`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (brandRes.status === 404) {
+        return NextResponse.redirect(new URL('/brand-setup', request.url));
+      }
+    } catch {
+      // Best-effort: if the check fails (network error, timeout), allow through
+    }
   }
 
   return response;
