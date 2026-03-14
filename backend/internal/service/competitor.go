@@ -837,6 +837,63 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	return nil
 }
 
+// ActiveSnapshotsForGenerate returns the latest snapshot for each active competitor,
+// formatted as JSON objects suitable for the Python /generate payload.
+func (s *CompetitorService) ActiveSnapshotsForGenerate(ctx context.Context, userID, brandID string) ([]json.RawMessage, error) {
+	if s.db == nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		store := s.getOrCreateMemoryStore(userID, brandID)
+		return s.buildSnapshotsForGenerate(store), nil
+	}
+
+	store, err := s.loadStoreFromDB(ctx, userID, brandID)
+	if err != nil {
+		return nil, err
+	}
+	return s.buildSnapshotsForGenerate(store), nil
+}
+
+func (s *CompetitorService) buildSnapshotsForGenerate(store *competitorStore) []json.RawMessage {
+	result := []json.RawMessage{}
+	for _, key := range store.Order {
+		rec := store.ByNormalized[key]
+		if rec == nil || rec.Status != competitorStatusActive {
+			continue
+		}
+
+		snapshots := store.Snapshots[rec.ID]
+
+		var themesJSON json.RawMessage = json.RawMessage("[]")
+		var signalsJSON json.RawMessage = json.RawMessage("{}")
+		confidence := 0.5
+
+		if len(snapshots) > 0 {
+			latest := snapshots[len(snapshots)-1]
+			if len(latest.ThemesJSON) > 0 {
+				themesJSON = latest.ThemesJSON
+			}
+			if len(latest.SignalsJSON) > 0 {
+				signalsJSON = latest.SignalsJSON
+			}
+			confidence = latest.Confidence
+		}
+
+		entry, err := json.Marshal(map[string]any{
+			"handle":       rec.NormalizedHandle,
+			"status":       rec.Status,
+			"themes_json":  themesJSON,
+			"signals_json": signalsJSON,
+			"confidence":   confidence,
+		})
+		if err != nil {
+			continue
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
 func extractJSONField(raw json.RawMessage, key string) string {
 	if len(raw) == 0 {
 		return ""

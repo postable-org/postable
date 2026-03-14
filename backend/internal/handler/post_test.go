@@ -66,6 +66,10 @@ func (m *mockPostService) ListByUserID(ctx context.Context, userID string) ([]se
 	return out, nil
 }
 
+func (m *mockPostService) GetLastSelectedTheme(_ context.Context, _, _ string) (string, error) {
+	return "", nil
+}
+
 func (m *mockPostService) UpdateStatus(ctx context.Context, id, userID, status string) (*service.Post, error) {
 	if status != "pending" && status != "approved" && status != "rejected" {
 		return nil, service.ErrInvalidStatus

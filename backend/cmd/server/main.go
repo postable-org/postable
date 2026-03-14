@@ -109,7 +109,7 @@ func main() {
 		r.Get("/api/posts/{id}/insights", postHandler.GetPostInsights)
 		r.Patch("/api/posts/{id}/status", postHandler.UpdateStatus)
 
-		generateHandler := handler.NewGenerateHandler(generateSvc, brandSvc, postSvc)
+		generateHandler := handler.NewGenerateHandler(generateSvc, brandSvc, postSvc, competitorSvc)
 		r.Get("/api/generate", generateHandler.Generate)
 	})
 

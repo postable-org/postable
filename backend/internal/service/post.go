@@ -132,6 +132,33 @@ func (s *PostService) ListByUserID(ctx context.Context, userID string) ([]Post, 
 	return posts, rows.Err()
 }
 
+// GetLastSelectedTheme reads the most recent selected_theme from trend_context for the given brand.
+// Returns "", nil when db is nil, when no posts exist, or when the field is absent.
+func (s *PostService) GetLastSelectedTheme(ctx context.Context, userID, brandID string) (string, error) {
+	if s.db == nil {
+		return "", nil
+	}
+
+	var theme *string
+	err := s.db.QueryRow(ctx,
+		`SELECT trend_context->'competitor_gap_analysis'->>'selected_theme'
+		 FROM generated_posts
+		 WHERE user_id=$1 AND brand_id=$2 AND trend_context IS NOT NULL
+		 ORDER BY created_at DESC LIMIT 1`,
+		userID, brandID,
+	).Scan(&theme)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	if theme == nil {
+		return "", nil
+	}
+	return *theme, nil
+}
+
 // UpdateStatus changes the status of a post belonging to the given user.
 // Returns ErrPostNotFound if the post does not exist or belongs to a different user.
 // Returns ErrInvalidStatus if the status value is not allowed.

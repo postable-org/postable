@@ -18,6 +18,7 @@ type PostServiceInterface interface {
 	GetByID(ctx context.Context, id, userID string) (*service.Post, error)
 	ListByUserID(ctx context.Context, userID string) ([]service.Post, error)
 	UpdateStatus(ctx context.Context, id, userID, status string) (*service.Post, error)
+	GetLastSelectedTheme(ctx context.Context, userID, brandID string) (string, error)
 }
 
 // PostHandler handles post-related HTTP requests.

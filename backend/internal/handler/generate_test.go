@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,13 +15,19 @@ import (
 	"postable/internal/service"
 )
 
+type mockCompetitorSvc struct{}
+
+func (m *mockCompetitorSvc) ActiveSnapshotsForGenerate(_ context.Context, _, _ string) ([]json.RawMessage, error) {
+	return []json.RawMessage{}, nil
+}
+
 func buildGenerateRouter(genSvc handler.GenerateServiceInterface, brandSvc handler.BrandServiceInterface, postSvc handler.PostServiceInterface) http.Handler {
 	r := chi.NewRouter()
 	r.Group(func(r chi.Router) {
 		r.Use(jwtauth.Verifier(testTokenAuth))
 		r.Use(jwtauth.Authenticator(testTokenAuth))
 
-		h := handler.NewGenerateHandler(genSvc, brandSvc, postSvc)
+		h := handler.NewGenerateHandler(genSvc, brandSvc, postSvc, &mockCompetitorSvc{})
 		r.Get("/api/generate", h.Generate)
 	})
 	return r
