@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-const PROTECTED = ['/dashboard', '/brand-setup', '/posts', '/campaigns', '/context', '/pricing', '/settings'];
+const PROTECTED = ['/dashboard', '/brand-setup', '/posts', '/campaigns', '/context', '/pricing', '/settings', '/social'];
 const AUTH_ONLY = ['/login', '/signup'];
 const SUBSCRIPTION_EXEMPT = ['/brand-setup', '/pricing'];
 

@@ -2,12 +2,14 @@ import { render, screen } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BrandSetupWizard from '@/components/forms/BrandSetupWizard';
 
-// Mock the brands API
 vi.mock('@/lib/api/brands', () => ({
   createBrand: vi.fn(),
 }));
 
-// Mock next/navigation
+vi.mock('@/lib/api/competitors', () => ({
+  updateCompetitors: vi.fn(),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),

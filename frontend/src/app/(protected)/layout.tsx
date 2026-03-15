@@ -2,6 +2,7 @@
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { PlatformProvider, usePlatform } from "@/lib/context/PlatformContext";
+import { useState } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -41,11 +42,8 @@ function ProtectedLayoutInner({
                 className="text-xs px-2 py-1 rounded-lg"
                 style={{
                   backgroundColor:
-                    platform === p.toLowerCase()
-                      ? "#0a0a0a"
-                      : "#f0ede7",
-                  color:
-                    platform === p.toLowerCase() ? "#f8f5ef" : "#8c8880",
+                    platform === p.toLowerCase() ? "#0a0a0a" : "#f0ede7",
+                  color: platform === p.toLowerCase() ? "#f8f5ef" : "#8c8880",
                   fontFamily: "var(--font-body)",
                 }}
               >
@@ -55,8 +53,8 @@ function ProtectedLayoutInner({
           </div>
         </div>
 
-        {/* Page content */}
-        <main className="flex-1">
+        {/* Page content with platform in context via data attr */}
+        <main className="flex-1" data-platform={platform}>
           {children}
         </main>
       </div>
@@ -73,6 +71,9 @@ function ProtectedLayoutInner({
         {[
           { href: "/dashboard", label: "Início", icon: "⊞" },
           { href: "/posts", label: "Posts", icon: "✦" },
+          { href: "/pipeline", label: "Pipeline", icon: "⧈" },
+          { href: "/analytics", label: "Métricas", icon: "◈" },
+          { href: "/social", label: "Social", icon: "◉" },
           { href: "/campaigns", label: "Camps.", icon: "◎" },
           { href: "/context", label: "IA", icon: "✿" },
         ].map(({ href, label, icon }) => (

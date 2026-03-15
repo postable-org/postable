@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Upload,
   X,
@@ -13,7 +13,10 @@ import {
   Sparkles,
   AtSign,
   Plus,
+  Building2,
+  Loader2,
 } from "lucide-react";
+import { getBrand, updateBrand, type BrandData } from "@/lib/api/brands";
 
 // ── Media Upload ─────────────────────────────────────────────────────────────
 
@@ -122,13 +125,7 @@ const QUESTIONS = [
 
 // ── Competitors ───────────────────────────────────────────────────────────────
 
-function CompetitorChip({
-  handle,
-  onRemove,
-}: {
-  handle: string;
-  onRemove: () => void;
-}) {
+function CompetitorChip({ handle, onRemove }: { handle: string; onRemove: () => void }) {
   return (
     <div
       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium"
@@ -204,6 +201,27 @@ function Section({
   );
 }
 
+const TONE_OPTIONS = [
+  { value: "formal", label: "Formal" },
+  { value: "casual", label: "Casual" },
+  { value: "bold", label: "Ousado" },
+  { value: "friendly", label: "Amigável" },
+  { value: "professional", label: "Profissional" },
+  { value: "other", label: "Personalizado" },
+];
+
+const CTA_OPTIONS = [
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "dm", label: "DM / Direct" },
+  { value: "landing_page", label: "Site / Link" },
+];
+
+const inputStyle = {
+  backgroundColor: "#f8f5ef",
+  border: "1px solid #e4e0d8",
+  fontFamily: "var(--font-body)",
+};
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ContextPage() {
@@ -211,13 +229,53 @@ export default function ContextPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [competitors, setCompetitors] = useState<string[]>([]);
   const [competitorInput, setCompetitorInput] = useState("");
-  const [saved, setSaved] = useState(false);
+
+  // Brand / company info
+  const [brandLoading, setBrandLoading] = useState(true);
+  const [brandSaving, setBrandSaving] = useState(false);
+  const [brandSaved, setBrandSaved] = useState(false);
+  const [brandError, setBrandError] = useState<string | null>(null);
+  const [brandForm, setBrandForm] = useState<BrandData>({
+    name: "",
+    niche: "",
+    city: "",
+    state: "",
+    tone_of_voice: "professional",
+    tone_custom: "",
+    cta_channel: "dm",
+  });
+
+  useEffect(() => {
+    getBrand()
+      .then((brand) => {
+        if (brand) {
+          setBrandForm({
+            name: brand.name ?? "",
+            niche: brand.niche,
+            city: brand.city,
+            state: brand.state,
+            tone_of_voice: brand.tone_of_voice,
+            tone_custom: brand.tone_custom ?? "",
+            cta_channel: brand.cta_channel as BrandData["cta_channel"],
+            context_json: brand.context_json,
+          });
+          // Load saved context answers
+          if (brand.context_json) {
+            try {
+              const saved = JSON.parse(brand.context_json) as Record<string, string>;
+              setAnswers(saved);
+            } catch { /* ignore */ }
+          }
+        }
+      })
+      .catch(() => setBrandError("Falha ao carregar dados da empresa."))
+      .finally(() => setBrandLoading(false));
+  }, []);
 
   const handleFiles = useCallback((files: File[]) => {
     const newFiles: MediaFile[] = files.map((file) => {
       const type = getFileType(file);
-      const preview =
-        type === "image" ? URL.createObjectURL(file) : undefined;
+      const preview = type === "image" ? URL.createObjectURL(file) : undefined;
       return { id: `${Date.now()}-${Math.random()}`, file, preview, type };
     });
     setMediaFiles((prev) => [...prev, ...newFiles]);
@@ -241,10 +299,21 @@ export default function ContextPage() {
     setCompetitorInput("");
   };
 
-  const handleSave = () => {
-    // UI-only for now — backend integration pending
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  const handleSave = async () => {
+    setBrandSaving(true);
+    setBrandError(null);
+    try {
+      await updateBrand({
+        ...brandForm,
+        context_json: Object.keys(answers).length > 0 ? JSON.stringify(answers) : undefined,
+      });
+      setBrandSaved(true);
+      setTimeout(() => setBrandSaved(false), 3000);
+    } catch {
+      setBrandError("Falha ao salvar. Tente novamente.");
+    } finally {
+      setBrandSaving(false);
+    }
   };
 
   return (
@@ -264,23 +333,32 @@ export default function ContextPage() {
         </div>
         <button
           onClick={handleSave}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold shrink-0 transition-all"
+          disabled={brandSaving || brandLoading}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold shrink-0 transition-all disabled:opacity-50"
           style={{
-            backgroundColor: saved ? "#10B981" : "#0a0a0a",
+            backgroundColor: brandSaved ? "#10B981" : "#0a0a0a",
             color: "#f8f5ef",
             fontFamily: "var(--font-body)",
           }}
         >
-          {saved ? (
+          {brandSaving ? (
+            <><Loader2 size={14} className="animate-spin" /> Salvando...</>
+          ) : brandSaved ? (
             <>✓ Salvo!</>
           ) : (
-            <>
-              <Save size={14} />
-              Salvar contexto
-            </>
+            <><Save size={14} /> Salvar contexto</>
           )}
         </button>
       </div>
+
+      {brandError && (
+        <div
+          className="rounded-xl px-4 py-3 text-sm"
+          style={{ backgroundColor: "#fde8e8", color: "#b91c1c", fontFamily: "var(--font-body)" }}
+        >
+          {brandError}
+        </div>
+      )}
 
       {/* AI hint */}
       <div
@@ -294,11 +372,145 @@ export default function ContextPage() {
         </p>
       </div>
 
+      {/* Section 0: Company Info */}
+      <Section
+        title="Informações da empresa"
+        subtitle="Nome, nicho, localização e tom de voz"
+        icon={Building2}
+      >
+        {brandLoading ? (
+          <div className="flex items-center gap-2 text-sm" style={{ color: "#8c8880" }}>
+            <Loader2 size={14} className="animate-spin" /> Carregando...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Company name */}
+            <div>
+              <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+                Nome da empresa
+              </label>
+              <input
+                type="text"
+                value={brandForm.name ?? ""}
+                onChange={(e) => setBrandForm((p) => ({ ...p, name: e.target.value }))}
+                placeholder="Ex: Padaria do João"
+                className="w-full rounded-xl px-4 py-3 text-sm outline-none focus:border-black"
+                style={{ ...inputStyle, border: "1px solid #e4e0d8" }}
+              />
+            </div>
+
+            {/* Niche */}
+            <div>
+              <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+                Nicho / Segmento
+              </label>
+              <input
+                type="text"
+                value={brandForm.niche}
+                onChange={(e) => setBrandForm((p) => ({ ...p, niche: e.target.value }))}
+                placeholder="Ex: Padaria artesanal, Clínica odontológica, Pet shop..."
+                className="w-full rounded-xl px-4 py-3 text-sm outline-none"
+                style={{ ...inputStyle, border: "1px solid #e4e0d8" }}
+              />
+            </div>
+
+            {/* City / State */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+                  Cidade
+                </label>
+                <input
+                  type="text"
+                  value={brandForm.city}
+                  onChange={(e) => setBrandForm((p) => ({ ...p, city: e.target.value }))}
+                  placeholder="São Paulo"
+                  className="w-full rounded-xl px-4 py-3 text-sm outline-none"
+                  style={{ ...inputStyle, border: "1px solid #e4e0d8" }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+                  Estado
+                </label>
+                <input
+                  type="text"
+                  value={brandForm.state}
+                  onChange={(e) => setBrandForm((p) => ({ ...p, state: e.target.value }))}
+                  placeholder="SP"
+                  className="w-full rounded-xl px-4 py-3 text-sm outline-none"
+                  style={{ ...inputStyle, border: "1px solid #e4e0d8" }}
+                />
+              </div>
+            </div>
+
+            {/* Tone of voice */}
+            <div>
+              <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+                Tom de voz
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {TONE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setBrandForm((p) => ({ ...p, tone_of_voice: opt.value }))}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: brandForm.tone_of_voice === opt.value ? "#0a0a0a" : "#f0ede7",
+                      color: brandForm.tone_of_voice === opt.value ? "#f8f5ef" : "#0a0a0a",
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {brandForm.tone_of_voice === "other" && (
+                <input
+                  type="text"
+                  value={brandForm.tone_custom ?? ""}
+                  onChange={(e) => setBrandForm((p) => ({ ...p, tone_custom: e.target.value }))}
+                  placeholder="Descreva o tom de voz"
+                  className="mt-2 w-full rounded-xl px-4 py-3 text-sm outline-none"
+                  style={{ ...inputStyle, border: "1px solid #e4e0d8" }}
+                />
+              )}
+            </div>
+
+            {/* CTA Channel */}
+            <div>
+              <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+                Canal de CTA principal
+              </label>
+              <div className="flex gap-2">
+                {CTA_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setBrandForm((p) => ({ ...p, cta_channel: opt.value as BrandData["cta_channel"] }))}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: brandForm.cta_channel === opt.value ? "#0a0a0a" : "#f0ede7",
+                      color: brandForm.cta_channel === opt.value ? "#f8f5ef" : "#0a0a0a",
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </Section>
+
       {/* Section 1: Media */}
       <Section
         title="Arquivos de referência"
         subtitle="Imagens, vídeos e documentos do seu negócio"
         icon={ImageIcon}
+        defaultOpen={false}
       >
         <DropZone onFiles={handleFiles} />
 
@@ -312,11 +524,7 @@ export default function ContextPage() {
               >
                 {mf.preview ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={mf.preview}
-                    alt={mf.file.name}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={mf.preview} alt={mf.file.name} className="w-full h-full object-cover" />
                 ) : (
                   <div
                     className="w-full h-full flex flex-col items-center justify-center gap-2"
@@ -363,9 +571,7 @@ export default function ContextPage() {
                 rows={3}
                 placeholder={placeholder}
                 value={answers[id] ?? ""}
-                onChange={(e) =>
-                  setAnswers((prev) => ({ ...prev, [id]: e.target.value }))
-                }
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [id]: e.target.value }))}
                 className="w-full rounded-xl border bg-[#f8f5ef] px-4 py-3 text-sm outline-none transition-all focus:border-foreground focus:ring-2 focus:ring-foreground/10 resize-none placeholder:text-muted-foreground"
                 style={{ borderColor: "#e4e0d8", fontFamily: "var(--font-body)" }}
               />
@@ -418,9 +624,7 @@ export default function ContextPage() {
                 <CompetitorChip
                   key={h}
                   handle={h}
-                  onRemove={() =>
-                    setCompetitors((prev) => prev.filter((c) => c !== h))
-                  }
+                  onRemove={() => setCompetitors((prev) => prev.filter((c) => c !== h))}
                 />
               ))}
             </div>

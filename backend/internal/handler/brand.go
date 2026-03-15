@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-chi/jwtauth/v5"
-
+	"postable/internal/middleware"
 	"postable/internal/service"
 )
+
+// ErrBrandNotFound aliases the service sentinel so handler checks work correctly.
+var ErrBrandNotFound = service.ErrBrandNotFound
 
 // BrandServiceInterface defines the operations needed by the brand handler.
 type BrandServiceInterface interface {
@@ -31,12 +33,11 @@ func NewBrandHandler(svc BrandServiceInterface) *BrandHandler {
 
 // getUserID extracts the user ID from the JWT claims in the request context.
 func getUserID(r *http.Request) (string, bool) {
-	_, claims, err := jwtauth.FromContext(r.Context())
+	userID, err := middleware.GetUserID(r)
 	if err != nil {
 		return "", false
 	}
-	sub, ok := claims["sub"].(string)
-	return sub, ok && sub != ""
+	return userID, userID != ""
 }
 
 // writeJSON writes a JSON response with the given status code.

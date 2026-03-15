@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -52,14 +53,20 @@ func main() {
 	// Configure Stripe
 	stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
 
-	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
-	if allowedOrigins == "" {
-		allowedOrigins = "http://localhost:3001, http://localhost:3000"
+	allowedOriginsRaw := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOriginsRaw == "" {
+		allowedOriginsRaw = "http://localhost:3001,http://localhost:3000"
+	}
+	var allowedOrigins []string
+	for _, o := range strings.Split(allowedOriginsRaw, ",") {
+		if trimmed := strings.TrimSpace(o); trimmed != "" {
+			allowedOrigins = append(allowedOrigins, trimmed)
+		}
 	}
 
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{allowedOrigins},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
 		AllowCredentials: false,
@@ -93,6 +100,14 @@ func main() {
 	postSvc := service.NewPostService(dbPool)
 	generateSvc := service.NewGenerateService()
 	subSvc := service.NewSubscriptionService(dbPool)
+	socialSvc := service.NewSocialService(dbPool, nil)
+	socialOAuthSvc := service.NewSocialOAuthService(socialSvc)
+	socialOAuthHandler := handler.NewSocialOAuthHandler(socialOAuthSvc)
+	r.Get("/api/social/oauth/{network}/callback", socialOAuthHandler.Callback)
+
+	if dbPool != nil {
+		go service.StartSocialScheduler(context.Background(), socialSvc, 15*time.Second, 20)
+	}
 
 	// Stripe price → plan mapping (monthly + yearly for each plan)
 	priceToplan := map[string]string{
@@ -141,6 +156,17 @@ func main() {
 			generateHandler := handler.NewGenerateHandlerWithQuota(generateSvc, brandSvc, postSvc, competitorSvc, subSvc)
 			r.Get("/api/generate", generateHandler.Generate)
 		})
+		socialHandler := handler.NewSocialHandler(socialSvc)
+		r.Get("/api/social/oauth/{network}/start", socialOAuthHandler.Start)
+		r.Get("/api/social/connections", socialHandler.ListConnections)
+		r.Post("/api/social/connections", socialHandler.UpsertConnection)
+		r.Delete("/api/social/connections/{id}", socialHandler.DeleteConnection)
+		r.Post("/api/social/publish", socialHandler.Publish)
+		r.Get("/api/social/jobs", socialHandler.ListJobs)
+		r.Post("/api/social/jobs/run-due", socialHandler.RunDueJobs)
+
+		generateHandler := handler.NewGenerateHandler(generateSvc, brandSvc, postSvc, competitorSvc)
+		r.Get("/api/generate", generateHandler.Generate)
 	})
 
 	port := os.Getenv("PORT")

@@ -1,17 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import {
-  Plus,
-  X,
   Calendar,
+  Facebook,
   Instagram,
   Linkedin,
-  Facebook,
-  Twitter,
   MoreHorizontal,
+  Plus,
   Target,
+  Twitter,
+  X,
 } from "lucide-react";
+import { useState } from "react";
 
 type PlatformId = "instagram" | "linkedin" | "facebook" | "x" | "reddit";
 type CampaignStatus = "draft" | "active" | "paused" | "completed";
@@ -36,7 +36,10 @@ const PLATFORMS: { id: PlatformId; label: string; color: string }[] = [
   { id: "reddit", label: "Reddit", color: "#FF4500" },
 ];
 
-const STATUS_CONFIG: Record<CampaignStatus, { label: string; color: string; bg: string }> = {
+const STATUS_CONFIG: Record<
+  CampaignStatus,
+  { label: string; color: string; bg: string }
+> = {
   draft: { label: "Rascunho", color: "#8c8880", bg: "#f0ede7" },
   active: { label: "Ativa", color: "#10B981", bg: "#d1fae5" },
   paused: { label: "Pausada", color: "#F59E0B", bg: "#fef3c7" },
@@ -47,7 +50,8 @@ const DEMO_CAMPAIGNS: Campaign[] = [
   {
     id: "1",
     name: "Lançamento Verão 2025",
-    description: "Campanha de lançamento da nova coleção de verão com 15 posts ao longo de 3 semanas.",
+    description:
+      "Campanha de lançamento da nova coleção de verão com 15 posts ao longo de 3 semanas.",
     platform: "instagram",
     status: "active",
     startDate: "2025-03-01",
@@ -58,7 +62,8 @@ const DEMO_CAMPAIGNS: Campaign[] = [
   {
     id: "2",
     name: "Promoção Dia das Mães",
-    description: "Sequência de posts para engajar clientes antes do Dia das Mães.",
+    description:
+      "Sequência de posts para engajar clientes antes do Dia das Mães.",
     platform: "facebook",
     status: "draft",
     startDate: "2025-04-25",
@@ -68,7 +73,21 @@ const DEMO_CAMPAIGNS: Campaign[] = [
   },
 ];
 
-const PlatformIcon = ({ id, color, size = 14 }: { id: PlatformId; color: string; size?: number }) => {
+function addDaysToISODate(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+const PlatformIcon = ({
+  id,
+  color,
+  size = 14,
+}: {
+  id: PlatformId;
+  color: string;
+  size?: number;
+}) => {
   const props = { size, strokeWidth: 1.8, style: { color } };
   if (id === "instagram") return <Instagram {...props} />;
   if (id === "linkedin") return <Linkedin {...props} />;
@@ -79,9 +98,11 @@ const PlatformIcon = ({ id, color, size = 14 }: { id: PlatformId; color: string;
 
 function CampaignCard({
   campaign,
+  now,
   onDelete,
 }: {
   campaign: Campaign;
+  now: number;
   onDelete: (id: string) => void;
 }) {
   const status = STATUS_CONFIG[campaign.status];
@@ -90,10 +111,11 @@ function CampaignCard({
   const end = new Date(campaign.endDate).toLocaleDateString("pt-BR");
 
   const totalDays =
-    (new Date(campaign.endDate).getTime() - new Date(campaign.startDate).getTime()) /
+    (new Date(campaign.endDate).getTime() -
+      new Date(campaign.startDate).getTime()) /
     (1000 * 60 * 60 * 24);
   const elapsed =
-    (Date.now() - new Date(campaign.startDate).getTime()) / (1000 * 60 * 60 * 24);
+    (now - new Date(campaign.startDate).getTime()) / (1000 * 60 * 60 * 24);
   const progress = Math.min(100, Math.max(0, (elapsed / totalDays) * 100));
 
   return (
@@ -137,7 +159,11 @@ function CampaignCard({
       <div className="flex items-center gap-2 flex-wrap">
         <span
           className="px-2.5 py-1 rounded-full text-xs font-medium"
-          style={{ backgroundColor: status.bg, color: status.color, fontFamily: "var(--font-body)" }}
+          style={{
+            backgroundColor: status.bg,
+            color: status.color,
+            fontFamily: "var(--font-body)",
+          }}
         >
           {status.label}
         </span>
@@ -153,26 +179,44 @@ function CampaignCard({
       {/* Dates + post count */}
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <p className="text-[10px] uppercase tracking-wider" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+          <p
+            className="text-[10px] uppercase tracking-wider"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
             Início
           </p>
-          <p className="text-xs font-medium mt-0.5" style={{ fontFamily: "var(--font-body)" }}>
+          <p
+            className="text-xs font-medium mt-0.5"
+            style={{ fontFamily: "var(--font-body)" }}
+          >
             {start}
           </p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+          <p
+            className="text-[10px] uppercase tracking-wider"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
             Fim
           </p>
-          <p className="text-xs font-medium mt-0.5" style={{ fontFamily: "var(--font-body)" }}>
+          <p
+            className="text-xs font-medium mt-0.5"
+            style={{ fontFamily: "var(--font-body)" }}
+          >
             {end}
           </p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+          <p
+            className="text-[10px] uppercase tracking-wider"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
             Posts
           </p>
-          <p className="text-xs font-medium mt-0.5" style={{ fontFamily: "var(--font-body)" }}>
+          <p
+            className="text-xs font-medium mt-0.5"
+            style={{ fontFamily: "var(--font-body)" }}
+          >
             {campaign.postCount}
           </p>
         </div>
@@ -182,14 +226,23 @@ function CampaignCard({
       {campaign.status === "active" && (
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px]" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+            <span
+              className="text-[10px]"
+              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+            >
               Progresso
             </span>
-            <span className="text-[10px] font-medium" style={{ fontFamily: "var(--font-body)" }}>
+            <span
+              className="text-[10px] font-medium"
+              style={{ fontFamily: "var(--font-body)" }}
+            >
               {Math.round(progress)}%
             </span>
           </div>
-          <div className="w-full h-1.5 rounded-full" style={{ backgroundColor: "#f0ede7" }}>
+          <div
+            className="w-full h-1.5 rounded-full"
+            style={{ backgroundColor: "#f0ede7" }}
+          >
             <div
               className="h-full rounded-full transition-all"
               style={{ width: `${progress}%`, backgroundColor: "#0a0a0a" }}
@@ -214,14 +267,17 @@ function NewCampaignModal({
     platform: "instagram",
     status: "draft",
     startDate: new Date().toISOString().slice(0, 10),
-    endDate: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    endDate: addDaysToISODate(21),
     postCount: 10,
     goal: "",
   });
 
   const inputClass =
     "w-full rounded-xl border bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-foreground focus:ring-2 focus:ring-foreground/10 placeholder:text-muted-foreground";
-  const borderStyle = { borderColor: "#e4e0d8", fontFamily: "var(--font-body)" };
+  const borderStyle = {
+    borderColor: "#e4e0d8",
+    fontFamily: "var(--font-body)",
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -250,7 +306,10 @@ function NewCampaignModal({
 
         <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+            <label
+              className="block text-xs font-medium mb-1.5"
+              style={{ fontFamily: "var(--font-body)" }}
+            >
               Nome da campanha *
             </label>
             <input
@@ -263,7 +322,10 @@ function NewCampaignModal({
           </div>
 
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+            <label
+              className="block text-xs font-medium mb-1.5"
+              style={{ fontFamily: "var(--font-body)" }}
+            >
               Plataforma
             </label>
             <div className="flex flex-wrap gap-2">
@@ -274,13 +336,18 @@ function NewCampaignModal({
                   onClick={() => setForm((p) => ({ ...p, platform: id }))}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all border"
                   style={{
-                    backgroundColor: form.platform === id ? "#0a0a0a" : "#ffffff",
+                    backgroundColor:
+                      form.platform === id ? "#0a0a0a" : "#ffffff",
                     color: form.platform === id ? "#f8f5ef" : "#0a0a0a",
                     borderColor: form.platform === id ? "#0a0a0a" : "#e4e0d8",
                     fontFamily: "var(--font-body)",
                   }}
                 >
-                  <PlatformIcon id={id} color={form.platform === id ? "#f8f5ef" : color} size={12} />
+                  <PlatformIcon
+                    id={id}
+                    color={form.platform === id ? "#f8f5ef" : color}
+                    size={12}
+                  />
                   {label}
                 </button>
               ))}
@@ -288,7 +355,10 @@ function NewCampaignModal({
           </div>
 
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+            <label
+              className="block text-xs font-medium mb-1.5"
+              style={{ fontFamily: "var(--font-body)" }}
+            >
               Objetivo da campanha
             </label>
             <input
@@ -301,7 +371,10 @@ function NewCampaignModal({
           </div>
 
           <div>
-            <label className="block text-xs font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+            <label
+              className="block text-xs font-medium mb-1.5"
+              style={{ fontFamily: "var(--font-body)" }}
+            >
               Descrição
             </label>
             <textarea
@@ -310,13 +383,18 @@ function NewCampaignModal({
               rows={3}
               placeholder="Descreva o contexto e a estratégia da campanha..."
               value={form.description}
-              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, description: e.target.value }))
+              }
             />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+              <label
+                className="block text-xs font-medium mb-1.5"
+                style={{ fontFamily: "var(--font-body)" }}
+              >
                 Início
               </label>
               <input
@@ -324,11 +402,16 @@ function NewCampaignModal({
                 className={inputClass}
                 style={borderStyle}
                 value={form.startDate}
-                onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, startDate: e.target.value }))
+                }
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+              <label
+                className="block text-xs font-medium mb-1.5"
+                style={{ fontFamily: "var(--font-body)" }}
+              >
                 Fim
               </label>
               <input
@@ -336,11 +419,16 @@ function NewCampaignModal({
                 className={inputClass}
                 style={borderStyle}
                 value={form.endDate}
-                onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, endDate: e.target.value }))
+                }
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+              <label
+                className="block text-xs font-medium mb-1.5"
+                style={{ fontFamily: "var(--font-body)" }}
+              >
                 Nº de posts
               </label>
               <input
@@ -350,7 +438,9 @@ function NewCampaignModal({
                 className={inputClass}
                 style={borderStyle}
                 value={form.postCount}
-                onChange={(e) => setForm((p) => ({ ...p, postCount: Number(e.target.value) }))}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, postCount: Number(e.target.value) }))
+                }
               />
             </div>
           </div>
@@ -396,14 +486,19 @@ function NewCampaignModal({
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>(DEMO_CAMPAIGNS);
+  const [referenceNow] = useState(() => Date.now());
   const [showModal, setShowModal] = useState(false);
-  const [filterPlatform, setFilterPlatform] = useState<PlatformId | "all">("all");
-  const [filterStatus, setFilterStatus] = useState<CampaignStatus | "all">("all");
+  const [filterPlatform, setFilterPlatform] = useState<PlatformId | "all">(
+    "all",
+  );
+  const [filterStatus, setFilterStatus] = useState<CampaignStatus | "all">(
+    "all",
+  );
 
   const filtered = campaigns.filter(
     (c) =>
       (filterPlatform === "all" || c.platform === filterPlatform) &&
-      (filterStatus === "all" || c.status === filterStatus)
+      (filterStatus === "all" || c.status === filterStatus),
   );
 
   const handleSave = (campaign: Omit<Campaign, "id">) => {
@@ -428,7 +523,10 @@ export default function CampaignsPage() {
           >
             Campanhas
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+          <p
+            className="text-sm mt-1"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
             Organize ciclos de posts por objetivo e plataforma.
           </p>
         </div>
@@ -486,22 +584,24 @@ export default function CampaignsPage() {
 
         {/* Status filter */}
         <div className="flex items-center gap-1">
-          {(["all", "draft", "active", "paused", "completed"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilterStatus(s)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-              style={{
-                backgroundColor: filterStatus === s ? "#0a0a0a" : "#f0ede7",
-                color: filterStatus === s ? "#f8f5ef" : "#8c8880",
-                fontFamily: "var(--font-body)",
-              }}
-            >
-              {s === "all"
-                ? "Todos"
-                : STATUS_CONFIG[s as CampaignStatus].label}
-            </button>
-          ))}
+          {(["all", "draft", "active", "paused", "completed"] as const).map(
+            (s) => (
+              <button
+                key={s}
+                onClick={() => setFilterStatus(s)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{
+                  backgroundColor: filterStatus === s ? "#0a0a0a" : "#f0ede7",
+                  color: filterStatus === s ? "#f8f5ef" : "#8c8880",
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                {s === "all"
+                  ? "Todos"
+                  : STATUS_CONFIG[s as CampaignStatus].label}
+              </button>
+            ),
+          )}
         </div>
       </div>
 
@@ -511,7 +611,10 @@ export default function CampaignsPage() {
           className="rounded-2xl p-14 text-center"
           style={{ border: "1.5px dashed #e4e0d8" }}
         >
-          <p className="text-sm" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+          <p
+            className="text-sm"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
             Nenhuma campanha encontrada. Crie sua primeira campanha!
           </p>
         </div>
@@ -521,6 +624,7 @@ export default function CampaignsPage() {
             <CampaignCard
               key={campaign.id}
               campaign={campaign}
+              now={referenceNow}
               onDelete={handleDelete}
             />
           ))}
@@ -528,7 +632,10 @@ export default function CampaignsPage() {
       )}
 
       {showModal && (
-        <NewCampaignModal onClose={() => setShowModal(false)} onSave={handleSave} />
+        <NewCampaignModal
+          onClose={() => setShowModal(false)}
+          onSave={handleSave}
+        />
       )}
     </div>
   );

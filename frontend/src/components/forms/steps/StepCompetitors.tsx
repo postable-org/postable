@@ -1,14 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { X, Plus, AtSign } from "lucide-react";
-
-const SUGGESTIONS = [
-  "@concorrente1",
-  "@marca_rival",
-  "@outra_empresa",
-  "@competidor_local",
-];
+import { AtSign, Plus, X } from "lucide-react";
+import { useRef, useState } from "react";
 
 interface Props {
   value: string[];
@@ -56,9 +49,12 @@ export default function StepCompetitors({ value, onChange }: Props) {
         >
           Quem são seus concorrentes?
         </h2>
-        <p className="text-base" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
-          Adicione os perfis do Instagram dos seus concorrentes. Usamos isso para
-          gerar conteúdo com inteligência competitiva.
+        <p
+          className="text-base"
+          style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+        >
+          Adicione os perfis do Instagram dos seus concorrentes. Usamos isso
+          para gerar conteúdo com inteligência competitiva.
         </p>
       </div>
 
@@ -91,7 +87,10 @@ export default function StepCompetitors({ value, onChange }: Props) {
           </button>
         </div>
 
-        <p className="text-xs text-center" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+        <p
+          className="text-xs text-center"
+          style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+        >
           Pressione{" "}
           <kbd
             className="px-1.5 py-0.5 rounded-md text-[10px] font-medium"

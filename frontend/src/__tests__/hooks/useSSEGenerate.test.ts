@@ -78,7 +78,7 @@ describe('useSSEGenerate', () => {
   it('starts with idle status', () => {
     const { result } = renderHook(() => useSSEGenerate(() => {}));
     expect(result.current.status).toBe('idle');
-    expect(result.current.messages).toEqual([]);
+    expect(result.current.progressMessage).toBe('');
     expect(result.current.error).toBeNull();
   });
 
@@ -98,7 +98,7 @@ describe('useSSEGenerate', () => {
     expect(MockEventSource.instances.length).toBeGreaterThan(0);
   });
 
-  it('accumulates messages from data events', async () => {
+  it('updates progressMessage from data events', async () => {
     const { result } = renderHook(() => useSSEGenerate(() => {}));
 
     await act(async () => {
@@ -111,13 +111,12 @@ describe('useSSEGenerate', () => {
     act(() => {
       es.simulateMessage('Buscando tendências...');
     });
-    expect(result.current.messages).toContain('Buscando tendências...');
+    expect(result.current.progressMessage).toBe('Buscando tendências...');
 
     act(() => {
       es.simulateMessage('Gerando conteúdo...');
     });
-    expect(result.current.messages).toContain('Buscando tendências...');
-    expect(result.current.messages).toContain('Gerando conteúdo...');
+    expect(result.current.progressMessage).toBe('Gerando conteúdo...');
   });
 
   it('calls onComplete with parsed PostContent on done event and sets status=complete', async () => {
