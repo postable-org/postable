@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +15,7 @@ interface InsightsPanelProps {
   onClose: () => void;
   onRetry: () => void;
   onRegenerateWithDifferentAngle: () => void;
+  planLocked?: boolean;
 }
 
 function toPercent(value: number) {
@@ -35,6 +38,7 @@ export function InsightsPanel({
   onClose,
   onRetry,
   onRegenerateWithDifferentAngle,
+  planLocked = false,
 }: InsightsPanelProps) {
   if (!open) return null;
 
@@ -65,9 +69,32 @@ export function InsightsPanel({
         </CardHeader>
 
         <CardContent className="space-y-5 pt-5">
-          {loading && <p className="text-sm text-muted-foreground">Carregando insights...</p>}
+          {planLocked && (
+            <div className="flex flex-col items-center justify-center gap-4 py-10 text-center">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: '#f0ede7' }}>
+                <Lock size={20} strokeWidth={1.8} style={{ color: '#a09d98' }} />
+              </div>
+              <div>
+                <p className="text-sm font-medium" style={{ color: '#0a0a0a' }}>
+                  Insights disponíveis no plano Advanced
+                </p>
+                <p className="text-xs mt-1" style={{ color: '#a09d98' }}>
+                  Faça upgrade para acessar a análise estratégica dos seus posts.
+                </p>
+              </div>
+              <Link
+                href="/pricing"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold"
+                style={{ backgroundColor: '#0a0a0a', color: '#f8f5ef' }}
+              >
+                Ver planos
+              </Link>
+            </div>
+          )}
 
-          {!loading && error && (
+          {!planLocked && loading && <p className="text-sm text-muted-foreground">Carregando insights...</p>}
+
+          {!planLocked && !loading && error && (
             <div className="space-y-3">
               <p className="text-sm text-destructive">{error}</p>
               <Button type="button" variant="outline" size="sm" onClick={onRetry}>
@@ -76,13 +103,13 @@ export function InsightsPanel({
             </div>
           )}
 
-          {!loading && !error && !insights && (
+          {!planLocked && !loading && !error && !insights && (
             <p className="text-sm text-muted-foreground">
               Este post ainda nao possui insights estruturados disponiveis.
             </p>
           )}
 
-          {!loading && !error && insights && (
+          {!planLocked && !loading && !error && insights && (
             <>
               <section className="space-y-1">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tema principal</h3>

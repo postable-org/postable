@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { getPostInsights, updatePostStatus } from '@/lib/api/posts';
+import { getPostInsights, updatePostStatus, PlanUpgradeRequiredError } from '@/lib/api/posts';
 import type { Post, PostInsights } from '@/lib/api/posts';
 import { InsightsPanel } from './InsightsPanel';
 
@@ -62,6 +62,7 @@ export function PostCard({ post, onStatusChange, onRegenerate }: PostCardProps) 
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [insights, setInsights] = useState<PostInsights | null>(null);
+  const [planLocked, setPlanLocked] = useState(false);
   const content = post.content_json;
 
   const handleApprove = async () => {
@@ -99,11 +100,16 @@ export function PostCard({ post, onStatusChange, onRegenerate }: PostCardProps) 
   const loadInsights = async () => {
     setInsightsLoading(true);
     setInsightsError(null);
+    setPlanLocked(false);
     try {
       const data = await getPostInsights(post.id);
       setInsights(data);
-    } catch {
-      setInsightsError('Nao foi possivel carregar os insights.');
+    } catch (err) {
+      if (err instanceof PlanUpgradeRequiredError) {
+        setPlanLocked(true);
+      } else {
+        setInsightsError('Nao foi possivel carregar os insights.');
+      }
     } finally {
       setInsightsLoading(false);
     }
@@ -224,6 +230,7 @@ export function PostCard({ post, onStatusChange, onRegenerate }: PostCardProps) 
         insights={insights}
         loading={insightsLoading}
         error={insightsError}
+        planLocked={planLocked}
         onClose={() => setPanelOpen(false)}
         onRetry={loadInsights}
         onRegenerateWithDifferentAngle={handleRegenerateWithDifferentAngle}

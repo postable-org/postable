@@ -22,6 +22,7 @@ type Post struct {
 	UserID       string          `json:"user_id"`
 	BrandID      string          `json:"brand_id"`
 	Status       string          `json:"status"`
+	Platform     string          `json:"platform"`
 	ContentJSON  json.RawMessage `json:"content_json"`
 	TrendContext json.RawMessage `json:"trend_context,omitempty"`
 	CreatedAt    time.Time       `json:"created_at"`
@@ -47,13 +48,17 @@ var validStatuses = map[string]bool{
 
 // Create inserts a new post for the given user.
 // If db is nil, returns a stub Post with ID="stub-id".
-func (s *PostService) Create(ctx context.Context, userID, brandID string, contentJSON, trendContext []byte) (*Post, error) {
+func (s *PostService) Create(ctx context.Context, userID, brandID string, contentJSON, trendContext []byte, platform string) (*Post, error) {
+	if platform == "" {
+		platform = "instagram"
+	}
 	if s.db == nil {
 		return &Post{
 			ID:           "stub-id",
 			UserID:       userID,
 			BrandID:      brandID,
 			Status:       "pending",
+			Platform:     platform,
 			ContentJSON:  contentJSON,
 			TrendContext: trendContext,
 			CreatedAt:    time.Now(),
@@ -63,12 +68,12 @@ func (s *PostService) Create(ctx context.Context, userID, brandID string, conten
 
 	post := &Post{}
 	row := s.db.QueryRow(ctx,
-		`INSERT INTO generated_posts (user_id, brand_id, status, content_json, trend_context)
-		 VALUES ($1, $2, 'pending', $3, $4)
-		 RETURNING id, user_id, brand_id, status, content_json, trend_context, created_at, updated_at`,
-		userID, brandID, contentJSON, trendContext,
+		`INSERT INTO generated_posts (user_id, brand_id, status, content_json, trend_context, platform)
+		 VALUES ($1, $2, 'pending', $3, $4, $5)
+		 RETURNING id, user_id, brand_id, status, platform, content_json, trend_context, created_at, updated_at`,
+		userID, brandID, contentJSON, trendContext, platform,
 	)
-	err := row.Scan(&post.ID, &post.UserID, &post.BrandID, &post.Status,
+	err := row.Scan(&post.ID, &post.UserID, &post.BrandID, &post.Status, &post.Platform,
 		&post.ContentJSON, &post.TrendContext, &post.CreatedAt, &post.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -85,11 +90,11 @@ func (s *PostService) GetByID(ctx context.Context, id, userID string) (*Post, er
 
 	post := &Post{}
 	row := s.db.QueryRow(ctx,
-		`SELECT id, user_id, brand_id, status, content_json, trend_context, created_at, updated_at
+		`SELECT id, user_id, brand_id, status, platform, content_json, trend_context, created_at, updated_at
 		 FROM generated_posts WHERE id = $1 AND user_id = $2`,
 		id, userID,
 	)
-	err := row.Scan(&post.ID, &post.UserID, &post.BrandID, &post.Status,
+	err := row.Scan(&post.ID, &post.UserID, &post.BrandID, &post.Status, &post.Platform,
 		&post.ContentJSON, &post.TrendContext, &post.CreatedAt, &post.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -108,7 +113,7 @@ func (s *PostService) ListByUserID(ctx context.Context, userID string) ([]Post, 
 	}
 
 	rows, err := s.db.Query(ctx,
-		`SELECT id, user_id, brand_id, status, content_json, trend_context, created_at, updated_at
+		`SELECT id, user_id, brand_id, status, platform, content_json, trend_context, created_at, updated_at
 		 FROM generated_posts WHERE user_id = $1 ORDER BY created_at DESC`,
 		userID,
 	)
@@ -120,7 +125,7 @@ func (s *PostService) ListByUserID(ctx context.Context, userID string) ([]Post, 
 	var posts []Post
 	for rows.Next() {
 		var p Post
-		if err := rows.Scan(&p.ID, &p.UserID, &p.BrandID, &p.Status,
+		if err := rows.Scan(&p.ID, &p.UserID, &p.BrandID, &p.Status, &p.Platform,
 			&p.ContentJSON, &p.TrendContext, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}

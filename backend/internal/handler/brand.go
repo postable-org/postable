@@ -86,7 +86,7 @@ func (h *BrandHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	brand, err := h.svc.GetByUserID(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, ErrBrandNotFound) {
+		if errors.Is(err, service.ErrBrandNotFound) {
 			slog.Info("brand get: not found", "userID", userID)
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "brand not found"})
 			return
@@ -118,7 +118,7 @@ func (h *BrandHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	brand, err := h.svc.Update(r.Context(), userID, input)
 	if err != nil {
-		if errors.Is(err, ErrBrandNotFound) {
+		if errors.Is(err, service.ErrBrandNotFound) {
 			slog.Info("brand update: not found", "userID", userID)
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "brand not found"})
 			return

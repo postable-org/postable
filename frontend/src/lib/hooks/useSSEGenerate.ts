@@ -24,7 +24,7 @@ export interface UseSSEGenerateResult {
   stageState: StageState;
   progressMessage: string;
   error: string | null;
-  start: () => void;
+  start: (platform?: string) => void;
   reset: () => void;
 }
 
@@ -64,7 +64,8 @@ export function useSSEGenerate(onComplete: (content: PostContent) => void): UseS
     finalResponseRef.current = null;
   }, []);
 
-  const start = useCallback(() => {
+  const start = useCallback((platform: string = 'instagram') => {
+    // Clean up any existing connection
     esRef.current?.close();
     finalResponseRef.current = null;
     setStageState({ stage: null, status: null, message: '' });
@@ -72,7 +73,7 @@ export function useSSEGenerate(onComplete: (content: PostContent) => void): UseS
     setError(null);
     setStatus('connecting');
 
-    const es = new EventSource('/api/generate');
+    const es = new EventSource(`/api/generate?platform=${encodeURIComponent(platform)}`);
     esRef.current = es;
     setStatus('streaming');
 

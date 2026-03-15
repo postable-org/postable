@@ -8,6 +8,7 @@ require (
 	github.com/go-chi/jwtauth/v5 v5.3.2
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/lestrrat-go/jwx/v2 v2.1.3
+	github.com/stripe/stripe-go/v76 v76.25.0
 )
 
 require (

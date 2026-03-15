@@ -1,13 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 // Force dynamic so Next.js never tries to statically pre-render this SSE route
 export const dynamic = 'force-dynamic'
 
 const GO_API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,8 +21,10 @@ export async function GET() {
   }
 
   let upstream: Response
+  const platform = request.nextUrl.searchParams.get('platform') ?? 'instagram'
+  
   try {
-    upstream = await fetch(`${GO_API_URL}/api/generate`, {
+    upstream = await fetch(`${GO_API_URL}/api/generate?platform=${encodeURIComponent(platform)}`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
   } catch (err) {

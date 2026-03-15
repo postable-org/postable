@@ -14,6 +14,8 @@ import {
   Kanban,
   BarChart2,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { getSubscription, createPortalSession } from "@/lib/api/subscription";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -69,12 +71,32 @@ interface SidebarProps {
   userName?: string;
 }
 
+const PLAN_LABELS: Record<string, string> = {
+  basic: "Basic",
+  advanced: "Advanced",
+  agency: "Agency",
+};
+
 export function Sidebar({
   selectedPlatform,
   onPlatformChange,
   userName,
 }: SidebarProps) {
   const pathname = usePathname();
+  const { data: subscription } = useQuery({
+    queryKey: ["subscription"],
+    queryFn: getSubscription,
+    staleTime: 60_000,
+  });
+
+  const handlePortal = async () => {
+    try {
+      const { url } = await createPortalSession();
+      window.location.href = url;
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <aside
@@ -225,6 +247,46 @@ export function Sidebar({
           margin: "0 16px 8px",
         }}
       />
+
+      {/* Plan badge */}
+      {subscription ? (
+        <div className="px-4 pb-2">
+          <button
+            type="button"
+            onClick={handlePortal}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all"
+            style={{
+              backgroundColor: "rgba(166,200,249,0.08)",
+              border: "1px solid rgba(166,200,249,0.15)",
+            }}
+          >
+            <span style={{ color: "rgba(248,245,239,0.5)", fontFamily: "var(--font-body)" }}>
+              Plano
+            </span>
+            <span
+              className="font-semibold"
+              style={{ color: "#a6c8f9", fontFamily: "var(--font-body)" }}
+            >
+              {PLAN_LABELS[subscription.plan] ?? subscription.plan}
+            </span>
+          </button>
+        </div>
+      ) : (
+        <div className="px-4 pb-2">
+          <Link
+            href="/pricing"
+            className="w-full flex items-center justify-center px-3 py-2 rounded-xl text-xs"
+            style={{
+              backgroundColor: "rgba(166,200,249,0.08)",
+              border: "1px solid rgba(166,200,249,0.15)",
+              color: "#a6c8f9",
+              fontFamily: "var(--font-body)",
+            }}
+          >
+            Fazer upgrade
+          </Link>
+        </div>
+      )}
 
       {/* Settings */}
       <div className="px-3 pb-1">

@@ -46,8 +46,16 @@ export async function getPosts(): Promise<Post[]> {
   return res.json();
 }
 
+export class PlanUpgradeRequiredError extends Error {
+  constructor() {
+    super('plan_upgrade_required');
+    this.name = 'PlanUpgradeRequiredError';
+  }
+}
+
 export async function getPostInsights(postId: string): Promise<PostInsights | null> {
   const res = await apiFetch(`/api/posts/${postId}/insights`);
+  if (res.status === 403) throw new PlanUpgradeRequiredError();
   if (res.status === 404) return null;
   if (!res.ok) throw new Error('Failed to fetch post insights');
   return res.json();

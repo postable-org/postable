@@ -1,16 +1,17 @@
 "use client";
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
+import { PlatformProvider, usePlatform } from "@/lib/context/PlatformContext";
 import { useState } from "react";
 
 export const dynamic = "force-dynamic";
 
-export default function ProtectedLayout({
+function ProtectedLayoutInner({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [platform, setPlatform] = useState("instagram");
+  const { platform, setPlatform } = usePlatform();
 
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: "#f8f5ef" }}>
@@ -91,5 +92,17 @@ export default function ProtectedLayout({
         ))}
       </nav>
     </div>
+  );
+}
+
+export default function ProtectedLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <PlatformProvider>
+      <ProtectedLayoutInner>{children}</ProtectedLayoutInner>
+    </PlatformProvider>
   );
 }

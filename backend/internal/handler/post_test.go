@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/jwtauth/v5"
 
 	"postable/internal/handler"
+	"postable/internal/middleware"
 	"postable/internal/service"
 )
 
@@ -23,7 +24,7 @@ type mockPostService struct {
 	createdID         string
 }
 
-func (m *mockPostService) Create(ctx context.Context, userID, brandID string, contentJSON, trendContext []byte) (*service.Post, error) {
+func (m *mockPostService) Create(ctx context.Context, userID, brandID string, contentJSON, trendContext []byte, platform string) (*service.Post, error) {
 	m.lastCreateContent = append([]byte(nil), contentJSON...)
 	m.lastCreateTrend = append([]byte(nil), trendContext...)
 	id := m.createdID
@@ -35,6 +36,7 @@ func (m *mockPostService) Create(ctx context.Context, userID, brandID string, co
 		UserID:       userID,
 		BrandID:      brandID,
 		Status:       "pending",
+		Platform:     platform,
 		ContentJSON:  append([]byte(nil), contentJSON...),
 		TrendContext: append([]byte(nil), trendContext...),
 		CreatedAt:    time.Now(),
@@ -86,11 +88,24 @@ func (m *mockPostService) UpdateStatus(ctx context.Context, id, userID, status s
 	return &clone, nil
 }
 
+// injectAdvancedSub injects an advanced subscription into the request context for testing.
+func injectAdvancedSub(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sub := &service.Subscription{
+			Plan:   "advanced",
+			Status: "active",
+		}
+		ctx := middleware.InjectSubscriptionForTest(r.Context(), sub)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func buildPostRouter(svc handler.PostServiceInterface) http.Handler {
 	r := chi.NewRouter()
 	r.Group(func(r chi.Router) {
 		r.Use(jwtauth.Verifier(testTokenAuth))
 		r.Use(jwtauth.Authenticator(testTokenAuth))
+		r.Use(injectAdvancedSub)
 
 		h := handler.NewPostHandler(svc)
 		r.Get("/api/posts", h.List)
