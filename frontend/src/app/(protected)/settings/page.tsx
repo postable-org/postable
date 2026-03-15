@@ -573,20 +573,12 @@ export default function SettingsPage() {
   ).length;
 
   return (
-    <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+    <div className="page-container">
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div className="page-header">
         <div>
-          <h1
-            className="text-3xl font-bold tracking-tight"
-            style={{ fontFamily: "var(--font-sans)" }}
-          >
-            Configurações
-          </h1>
-          <p
-            className="text-sm mt-1"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
+          <h1 className="page-title">Configurações</h1>
+          <p className="page-subtitle">
             Gerencie sua conta, conexões sociais e preferências.
           </p>
         </div>

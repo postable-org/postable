@@ -426,28 +426,17 @@ export default function PipelinePage() {
   );
 
   return (
-    <div className="flex flex-col flex-1 h-full min-h-screen pb-24 md:pb-0 min-w-0">
-      {/* ── Header — mesmo padrão max-w-6xl + px-6 py-8 ── */}
-      <div
-        className="w-full max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4 shrink-0"
-        style={{ borderBottom: "1px solid #e4e0d8" }}
-      >
+    <div className="page-container">
+      {/* ── Header ── */}
+      <div className="page-header">
         <div>
-          <h1
-            className="text-3xl font-bold tracking-tight"
-            style={{ fontFamily: "var(--font-sans)" }}
-          >
-            Pipeline
-          </h1>
-          <p
-            className="text-sm mt-1"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
+          <h1 className="page-title">Pipeline</h1>
+          <p className="page-subtitle">
             {totalPosts} {totalPosts === 1 ? "post" : "posts"} no pipeline
           </p>
         </div>
 
-        {/* Platform filter — mesmo padrão pill do Contexto */}
+        {/* Platform filter */}
         <div
           className="flex items-center gap-1 p-1 rounded-2xl overflow-x-auto shrink-0"
           style={{ backgroundColor: "#f0ede7" }}
@@ -482,8 +471,8 @@ export default function PipelinePage() {
 
       {/* ── Board ── */}
       <div
-        className="w-full max-w-6xl mx-auto flex gap-4 px-6 py-5 overflow-x-auto"
-        style={{ alignItems: "flex-start", flex: 1 }}
+        className="-mx-6 flex gap-4 px-6 overflow-x-auto"
+        style={{ alignItems: "flex-start" }}
         onDragEnd={() => {
           setDragging(null);
           setDragOver(null);

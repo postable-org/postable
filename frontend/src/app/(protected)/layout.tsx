@@ -3,7 +3,17 @@
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { PlatformProvider, usePlatform } from "@/lib/context/PlatformContext";
 import { createClient } from "@/lib/supabase";
+import {
+  BarChart2,
+  Brain,
+  FileText,
+  Kanban,
+  LayoutDashboard,
+  Megaphone,
+  Share2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +21,19 @@ function nameFromEmail(email: string): string {
   return email.split("@")[0];
 }
 
+const MOBILE_NAV_ITEMS = [
+  { href: "/dashboard", label: "Início", Icon: LayoutDashboard },
+  { href: "/posts", label: "Posts", Icon: FileText },
+  { href: "/pipeline", label: "Pipeline", Icon: Kanban },
+  { href: "/analytics", label: "Métricas", Icon: BarChart2 },
+  { href: "/social", label: "Social", Icon: Share2 },
+  { href: "/campaigns", label: "Camps.", Icon: Megaphone },
+  { href: "/context", label: "IA", Icon: Brain },
+] as const;
+
 function ProtectedLayoutInner({ children }: { children: React.ReactNode }) {
   const { platform, setPlatform } = usePlatform();
+  const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [userName, setUserName] = useState<string | undefined>(undefined);
 
@@ -25,7 +46,7 @@ function ProtectedLayoutInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: "#f8f5ef" }}>
+    <div className="flex min-h-screen bg-background">
       {/* Sidebar — desktop only */}
       <div className="hidden md:block">
         <Sidebar
@@ -42,14 +63,8 @@ function ProtectedLayoutInner({ children }: { children: React.ReactNode }) {
         className={`flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-200 ${sidebarOpen ? "md:ml-[220px]" : "md:ml-[64px]"}`}
       >
         {/* Mobile top bar */}
-        <div
-          className="md:hidden flex items-center justify-between px-4 py-3 border-b sticky top-0 z-30"
-          style={{ backgroundColor: "#f8f5ef", borderColor: "#e4e0d8" }}
-        >
-          <span
-            className="font-semibold"
-            style={{ fontFamily: "var(--font-sans)" }}
-          >
+        <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border sticky top-0 z-30 bg-background">
+          <span className="font-semibold font-sans text-foreground">
             Postable
           </span>
           {/* Mobile platform selector */}
@@ -58,13 +73,11 @@ function ProtectedLayoutInner({ children }: { children: React.ReactNode }) {
               <button
                 key={p}
                 onClick={() => setPlatform(p.toLowerCase())}
-                className="text-xs px-2 py-1 rounded-lg"
-                style={{
-                  backgroundColor:
-                    platform === p.toLowerCase() ? "#0a0a0a" : "#f0ede7",
-                  color: platform === p.toLowerCase() ? "#f8f5ef" : "#8c8880",
-                  fontFamily: "var(--font-body)",
-                }}
+                className={`text-xs px-2 py-1 rounded-lg transition-all ${
+                  platform === p.toLowerCase()
+                    ? "bg-foreground text-primary-foreground"
+                    : "bg-secondary text-muted-foreground"
+                }`}
               >
                 {p}
               </button>
@@ -80,35 +93,32 @@ function ProtectedLayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* Mobile bottom nav */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 flex z-40"
-        style={{
-          backgroundColor: "#0a0a0a",
-          borderTop: "1px solid rgba(255,255,255,0.08)",
-          paddingBottom: "env(safe-area-inset-bottom)",
-        }}
+        className="md:hidden fixed bottom-0 left-0 right-0 flex z-40 bg-foreground border-t border-white/[0.08]"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        {[
-          { href: "/dashboard", label: "Início", icon: "⊞" },
-          { href: "/posts", label: "Posts", icon: "✦" },
-          { href: "/pipeline", label: "Pipeline", icon: "⧈" },
-          { href: "/analytics", label: "Métricas", icon: "◈" },
-          { href: "/social", label: "Social", icon: "◉" },
-          { href: "/campaigns", label: "Camps.", icon: "◎" },
-          { href: "/context", label: "IA", icon: "✿" },
-        ].map(({ href, label, icon }) => (
-          <a
-            key={href}
-            href={href}
-            className="flex-1 flex flex-col items-center gap-1 py-3 text-xs"
-            style={{
-              color: "rgba(248,245,239,0.5)",
-              fontFamily: "var(--font-body)",
-            }}
-          >
-            <span className="text-base leading-none">{icon}</span>
-            {label}
-          </a>
-        ))}
+        {MOBILE_NAV_ITEMS.map(({ href, label, Icon }) => {
+          const isActive =
+            pathname === href ||
+            (href !== "/dashboard" && pathname.startsWith(href));
+          return (
+            <a
+              key={href}
+              href={href}
+              className="flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] transition-colors"
+              style={{
+                color: isActive
+                  ? "rgba(248,245,239,0.95)"
+                  : "rgba(248,245,239,0.4)",
+              }}
+            >
+              <Icon
+                size={18}
+                strokeWidth={isActive ? 2 : 1.6}
+              />
+              <span>{label}</span>
+            </a>
+          );
+        })}
       </nav>
     </div>
   );

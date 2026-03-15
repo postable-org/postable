@@ -451,31 +451,18 @@ export default function CampaignsPage() {
   };
 
   return (
-    <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+    <div className="page-container">
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div className="page-header">
         <div>
-          <h1
-            className="text-3xl font-bold tracking-tight"
-            style={{ fontFamily: "var(--font-sans)" }}
-          >
-            Campanhas
-          </h1>
-          <p
-            className="text-sm mt-1"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
+          <h1 className="page-title">Campanhas</h1>
+          <p className="page-subtitle">
             Organize ciclos de posts por objetivo e plataforma.
           </p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium shrink-0 transition-all"
-          style={{
-            backgroundColor: "#0a0a0a",
-            color: "#f8f5ef",
-            fontFamily: "var(--font-body)",
-          }}
+          className="btn-primary shrink-0"
         >
           <Plus size={14} strokeWidth={2.5} />
           Nova campanha
@@ -543,14 +530,8 @@ export default function CampaignsPage() {
 
       {/* ── Grid ── */}
       {filtered.length === 0 ? (
-        <div
-          className="rounded-2xl p-14 text-center"
-          style={{ border: "1.5px dashed #e4e0d8" }}
-        >
-          <p
-            className="text-sm"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
+        <div className="empty-box">
+          <p className="text-sm text-muted-foreground">
             Nenhuma campanha encontrada. Crie sua primeira campanha!
           </p>
         </div>
