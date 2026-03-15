@@ -123,20 +123,12 @@ export default function PostsPage() {
   const activePlatformData = PLATFORMS.find((p) => p.id === activePlatform);
 
   return (
-    <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+    <div className="page-container">
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div className="page-header">
         <div>
-          <h1
-            className="text-3xl font-bold tracking-tight"
-            style={{ fontFamily: "var(--font-sans)" }}
-          >
-            Posts
-          </h1>
-          <p
-            className="text-sm mt-1"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
+          <h1 className="page-title">Posts</h1>
+          <p className="page-subtitle">
             Biblioteca de conteúdo gerado e histórico por plataforma.
           </p>
         </div>
@@ -211,22 +203,16 @@ export default function PostsPage() {
             <button
               key={id}
               onClick={() => setStatusFilter(id)}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-              style={{
-                backgroundColor: statusFilter === id ? "#0a0a0a" : "#f0ede7",
-                color: statusFilter === id ? "#f8f5ef" : "#8c8880",
-                fontFamily: "var(--font-body)",
-              }}
+              className={`filter-chip transition-all ${
+                statusFilter === id ? "filter-chip-active" : "filter-chip-inactive"
+              }`}
             >
               {label}
             </button>
           ))}
         </div>
 
-        <div
-          className="flex items-center gap-0.5 p-1 rounded-xl"
-          style={{ backgroundColor: "#f0ede7" }}
-        >
+        <div className="pill-bar">
           {[
             { id: "grid" as const, Icon: LayoutGrid },
             { id: "list" as const, Icon: List },
@@ -235,11 +221,9 @@ export default function PostsPage() {
             <button
               key={id}
               onClick={() => setViewMode(id)}
-              className="p-2 rounded-lg transition-all"
-              style={{
-                backgroundColor: viewMode === id ? "#ffffff" : "transparent",
-                color: viewMode === id ? "#0a0a0a" : "#8c8880",
-              }}
+              className={`p-2 rounded-lg transition-all ${
+                viewMode === id ? "bg-card text-foreground" : "text-muted-foreground"
+              }`}
             >
               <Icon size={14} strokeWidth={1.8} />
             </button>
@@ -268,14 +252,8 @@ export default function PostsPage() {
 
       {/* ── Posts ── */}
       {filteredPosts.length === 0 ? (
-        <div
-          className="rounded-2xl p-14 text-center"
-          style={{ border: "1.5px dashed #e4e0d8" }}
-        >
-          <p
-            className="text-sm"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
+        <div className="empty-box">
+          <p className="text-sm text-muted-foreground">
             Nenhum post encontrado. Gere seu primeiro post!
           </p>
         </div>

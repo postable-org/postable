@@ -104,6 +104,14 @@
     font-weight: 700;
     letter-spacing: -0.02em;
   }
+  /* Form elements inherit body font — elimina inline fontFamily em inputs/buttons */
+  input,
+  textarea,
+  select,
+  button,
+  a {
+    font-family: var(--font-body), system-ui, sans-serif;
+  }
 }
 
 /* ─── Onboarding step animation ─── */
@@ -190,5 +198,312 @@
 }
 .hide-scrollbar::-webkit-scrollbar {
   display: none; /* Chrome, Safari and Opera */
+}
+
+/* ─── Layout & Page utilities ─────────────────────────────────────────────── */
+
+/* Wrapper padrão de todas as páginas protegidas */
+.page-container {
+  padding: 2rem 1.5rem;
+  max-width: 72rem;
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding-bottom: 6rem;
+}
+@media (min-width: 768px) {
+  .page-container {
+    padding-bottom: 2rem;
+  }
+}
+
+/* Header de página — título + subtítulo + ação */
+.page-header {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+}
+@media (min-width: 640px) {
+  .page-header {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+}
+
+/* h1 padrão de página */
+.page-title {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  color: var(--foreground);
+}
+
+/* Subtítulo logo abaixo do h1 */
+.page-subtitle {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  margin-top: 0.25rem;
+  color: var(--muted-foreground);
+}
+
+/* Label de seção — estilo "POSTS APROVADOS (3)" */
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+/* ─── Card utilities ───────────────────────────────────────────────────────── */
+
+.card-base {
+  border-radius: 1rem;
+  background-color: var(--card);
+  border: 1.5px solid var(--border);
+}
+
+.card-base-p {
+  border-radius: 1rem;
+  background-color: var(--card);
+  border: 1.5px solid var(--border);
+  padding: 1.25rem;
+}
+
+/* Card escuro de destaque (ex: gerar post) */
+.card-dark {
+  border-radius: 1rem;
+  background-color: var(--foreground);
+  color: var(--primary-foreground);
+}
+
+/* ─── Button utilities ─────────────────────────────────────────────────────── */
+
+/* Botão primário — preto sobre fundo claro */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  background-color: var(--foreground);
+  color: var(--primary-foreground);
+  cursor: pointer;
+}
+.btn-primary:hover { opacity: 0.88; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Botão secundário — superfície elevada */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: background-color 0.15s ease;
+  background-color: var(--secondary);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.btn-secondary:hover { background-color: var(--muted); }
+.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ─── Input utilities ──────────────────────────────────────────────────────── */
+
+.input-field {
+  width: 100%;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  background-color: var(--background);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+}
+.input-field:focus {
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.06);
+}
+.input-field::placeholder {
+  color: var(--muted-foreground);
+}
+
+.textarea-field {
+  width: 100%;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  background-color: var(--background);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  resize: none;
+}
+.textarea-field:focus {
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.06);
+}
+.textarea-field::placeholder {
+  color: var(--muted-foreground);
+}
+
+/* ─── Pill / Filter bar ────────────────────────────────────────────────────── */
+
+/* Container da barra de pills (ex: toggles de modo, seletores) */
+.pill-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  border-radius: 0.75rem;
+  background-color: var(--secondary);
+}
+
+.pill-item {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+
+.pill-item-active {
+  background-color: var(--foreground);
+  color: var(--primary-foreground);
+}
+
+.pill-item-inactive {
+  background-color: transparent;
+  color: var(--muted-foreground);
+}
+
+/* Chip de filtro individual (ex: Todos / Pendentes / Aprovados) */
+.filter-chip {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+.filter-chip-active {
+  background-color: var(--foreground);
+  color: var(--primary-foreground);
+}
+.filter-chip-inactive {
+  background-color: var(--secondary);
+  color: var(--muted-foreground);
+}
+
+/* ─── Icon box ─────────────────────────────────────────────────────────────── */
+
+/* Caixa de ícone quadrada 36px */
+.icon-box {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background-color: var(--secondary);
+}
+
+/* ─── Banners de estado ────────────────────────────────────────────────────── */
+
+/* Estado vazio com borda tracejada */
+.empty-box {
+  border-radius: 1rem;
+  padding: 3.5rem 1.5rem;
+  text-align: center;
+  border: 1.5px dashed var(--border);
+}
+
+/* Banner IA / hint de contexto */
+.ai-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background-color: rgba(166, 200, 249, 0.1);
+  border: 1px solid rgba(166, 200, 249, 0.3);
+}
+
+/* Banners de feedback */
+.banner-success {
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  background-color: #dff7ea;
+  color: #0f766e;
+}
+
+.banner-error {
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  background-color: #fde8e8;
+  color: #b91c1c;
+}
+
+.banner-warning {
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  background-color: #fff8e6;
+  border: 1px solid #f5c518;
+  color: #7a5c00;
+}
+
+/* ─── Status badges ────────────────────────────────────────────────────────── */
+
+.badge-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  background-color: rgba(217, 119, 6, 0.12);
+  color: #b45309;
+}
+
+.badge-approved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.badge-rejected {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  background-color: rgba(225, 48, 108, 0.12);
+  color: #be123c;
 }
 

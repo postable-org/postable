@@ -442,33 +442,20 @@ export default function ContextPage() {
   };
 
   return (
-    <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+    <div className="page-container">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div className="page-header">
         <div>
-          <h1
-            className="text-3xl font-bold tracking-tight"
-            style={{ fontFamily: "var(--font-sans)" }}
-          >
-            Contexto da Empresa
-          </h1>
-          <p
-            className="text-sm mt-1"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
-            A IA usa essas informações para criar posts mais precisos e
-            relevantes.
+          <h1 className="page-title">Contexto da Empresa</h1>
+          <p className="page-subtitle">
+            A IA usa essas informações para criar posts mais precisos e relevantes.
           </p>
         </div>
         <button
           onClick={handleSave}
           disabled={brandSaving || brandLoading}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium shrink-0 transition-all disabled:opacity-50"
-          style={{
-            backgroundColor: brandSaved ? "#10B981" : "#0a0a0a",
-            color: "#f8f5ef",
-            fontFamily: "var(--font-body)",
-          }}
+          className="btn-primary shrink-0 disabled:opacity-50"
+          style={{ backgroundColor: brandSaved ? "#10B981" : undefined }}
         >
           {brandSaving ? (
             <>
@@ -485,26 +472,11 @@ export default function ContextPage() {
       </div>
 
       {brandError && (
-        <div
-          className="rounded-xl px-4 py-3 text-sm"
-          style={{
-            backgroundColor: "#fde8e8",
-            color: "#b91c1c",
-            fontFamily: "var(--font-body)",
-          }}
-        >
-          {brandError}
-        </div>
+        <div className="banner-error">{brandError}</div>
       )}
 
       {/* AI hint */}
-      <div
-        className="flex items-start gap-3 px-4 py-3 rounded-xl"
-        style={{
-          backgroundColor: "rgba(166,200,249,0.1)",
-          border: "1px solid rgba(166,200,249,0.3)",
-        }}
-      >
+      <div className="ai-hint">
         <Sparkles
           size={16}
           style={{ color: "#a6c8f9", marginTop: 1 }}

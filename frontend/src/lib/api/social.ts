@@ -129,3 +129,35 @@ export async function publishSocialPost(
   );
   return res.json();
 }
+
+export async function uploadSocialMedia(file: File): Promise<string> {
+  const { createClient } = await import("../supabase");
+  const supabase = createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+  const res = await fetch(`${apiUrl}/api/images/upload`, {
+    method: "POST",
+    headers: session?.access_token
+      ? { Authorization: `Bearer ${session.access_token}` }
+      : {},
+    body: formData,
+  });
+
+  if (!res.ok) {
+    let message = "Upload falhou";
+    try {
+      const body = await res.json();
+      message = body.error ?? message;
+    } catch {}
+    throw new Error(message);
+  }
+
+  const data = await res.json();
+  return data.url as string;
+}

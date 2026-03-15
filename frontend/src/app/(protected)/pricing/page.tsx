@@ -62,26 +62,15 @@ export default function PricingPage() {
   };
 
   return (
-    // Pricing usa layout centrado de tela cheia — não tem sidebar wrapper
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-6 py-16"
-      style={{ backgroundColor: "#f8f5ef" }}
-    >
-      <div className="max-w-5xl w-full space-y-8">
-        {/* ── Header — mesma estrutura de título/subtítulo ── */}
-        <div className="text-center">
-          <h1
-            className="text-3xl font-bold tracking-tight"
-            style={{ fontFamily: "var(--font-sans)", color: "#0a0a0a" }}
-          >
-            Escolha seu plano
-          </h1>
-          <p
-            className="text-sm mt-1"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
+    <div className="page-container">
+      {/* ── Header ── */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Escolha seu plano</h1>
+          <p className="page-subtitle">
             Posts gerados por IA, por plataforma, todo mês.
           </p>
+        </div>
 
           {/* Billing toggle — mesmo padrão pill */}
           <div
@@ -271,7 +260,6 @@ export default function PricingPage() {
             );
           })}
         </div>
-      </div>
     </div>
   );
 }

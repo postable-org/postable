@@ -6,6 +6,7 @@ import {
   getSocialConnections,
   getSocialJobs,
   publishSocialPost,
+  uploadSocialMedia,
   type SocialConnection,
   type SocialJob,
   type SocialNetwork,
@@ -16,17 +17,21 @@ import {
   CheckCircle,
   ChevronDown,
   Facebook,
+  ImageIcon,
   Instagram,
   Linkedin,
   Loader2,
   Lock,
   Radio,
   Send,
+  Upload,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type ElementType,
@@ -125,16 +130,24 @@ export default function SocialPage() {
   const [isPending, startTransition] = useTransition();
   const [publishForm, setPublishForm] = useState({
     network: "instagram" as SocialNetwork,
-    deliveryMode: "now" as "now" | "schedule",
     connectionId: "",
     source: "manual" as "manual" | "generated",
     postId: "",
     title: "",
     text: "",
     link: "",
-    mediaUrls: "",
     publishAt: "",
   });
+  const [mediaFileItems, setMediaFileItems] = useState<
+    {
+      id: string;
+      name: string;
+      url?: string;
+      uploading: boolean;
+      error?: string;
+    }[]
+  >([]);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
 
   const filteredConnections = useMemo(
     () =>
@@ -208,6 +221,36 @@ export default function SocialPage() {
     });
   }
 
+  async function handleMediaSelect(files: File[]) {
+    for (const file of files) {
+      const id = `${Date.now()}-${Math.random()}`;
+      setMediaFileItems((prev) => [
+        ...prev,
+        { id, name: file.name, uploading: true },
+      ]);
+      try {
+        const url = await uploadSocialMedia(file);
+        setMediaFileItems((prev) =>
+          prev.map((item) =>
+            item.id === id ? { ...item, url, uploading: false } : item,
+          ),
+        );
+      } catch (err) {
+        setMediaFileItems((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  uploading: false,
+                  error: err instanceof Error ? err.message : "Falha no upload",
+                }
+              : item,
+          ),
+        );
+      }
+    }
+  }
+
   async function handlePublishSubmit(deliveryMode: "now" | "schedule") {
     if (!hasAnyConnections) {
       setFeedback({
@@ -237,23 +280,20 @@ export default function SocialPage() {
       });
       return;
     }
-    if (
-      publishForm.network === "instagram" &&
-      publishForm.mediaUrls
-        .split("\n")
-        .map((item) => item.trim())
-        .filter(Boolean).length === 0
-    ) {
+    const uploadedMediaUrls = mediaFileItems
+      .filter((item) => item.url)
+      .map((item) => item.url!);
+    if (publishForm.network === "instagram" && uploadedMediaUrls.length === 0) {
       setFeedback({
         tone: "error",
-        text: "No Instagram, informe ao menos uma URL publica de midia.",
+        text: "No Instagram, adicione ao menos uma imagem.",
       });
       return;
     }
     if (deliveryMode === "schedule" && !publishForm.publishAt) {
       setFeedback({
         tone: "error",
-        text: "Escolha data e horario para agendar.",
+        text: "Escolha data e horário para agendar.",
       });
       return;
     }
@@ -272,10 +312,7 @@ export default function SocialPage() {
             ? publishForm.text || undefined
             : undefined,
         link: publishForm.link || undefined,
-        media_urls: publishForm.mediaUrls
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
+        media_urls: uploadedMediaUrls,
         publish_at:
           deliveryMode === "schedule" && publishForm.publishAt
             ? new Date(publishForm.publishAt).toISOString()
@@ -290,14 +327,13 @@ export default function SocialPage() {
       });
       setPublishForm((current) => ({
         ...current,
-        deliveryMode: "now",
         title: "",
         text: "",
         link: "",
-        mediaUrls: "",
         publishAt: "",
         postId: "",
       }));
+      setMediaFileItems([]);
       refreshData();
     } catch (error) {
       setFeedback({
@@ -308,21 +344,14 @@ export default function SocialPage() {
   }
 
   return (
-    <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <div className="page-container">
+      {/* ── Header ── */}
+      <div className="page-header">
         <div>
-          <p
-            className="text-sm"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
+          <h1 className="page-title">Social Publishing</h1>
+          <p className="page-subtitle">
             Conectar contas, publicar agora e agendar conteúdo no horário certo.
           </p>
-          <h1
-            className="text-3xl font-bold tracking-tight mt-1"
-            style={{ fontFamily: "var(--font-sans)" }}
-          >
-            Social Publishing
-          </h1>
         </div>
         <div className="flex flex-wrap gap-2">
           {NETWORKS.map((item) => (
@@ -335,15 +364,11 @@ export default function SocialPage() {
                   connectionId: "",
                 }))
               }
-              className="px-3 py-2 rounded-xl text-xs font-medium transition-all border"
-              style={{
-                backgroundColor:
-                  publishForm.network === item.id ? "#0a0a0a" : "#f0ede7",
-                color: publishForm.network === item.id ? "#f8f5ef" : "#0a0a0a",
-                borderColor:
-                  publishForm.network === item.id ? "#0a0a0a" : "#e4e0d8",
-                fontFamily: "var(--font-body)",
-              }}
+              className={`filter-chip transition-all border ${
+                publishForm.network === item.id
+                  ? "filter-chip-active border-foreground"
+                  : "filter-chip-inactive border-border"
+              }`}
             >
               {item.label}
             </button>
@@ -353,72 +378,38 @@ export default function SocialPage() {
 
       {feedback && (
         <div
-          className="rounded-2xl px-4 py-3 text-sm"
-          style={{
-            backgroundColor:
-              feedback.tone === "success" ? "#dff7ea" : "#fde8e8",
-            color: feedback.tone === "success" ? "#0f766e" : "#b91c1c",
-            fontFamily: "var(--font-body)",
-          }}
+          className={
+            feedback.tone === "success" ? "banner-success" : "banner-error"
+          }
         >
           {feedback.text}
         </div>
       )}
 
-      <section
-        className="rounded-2xl p-6"
-        style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
-      >
+      {/* ── Publicar ou agendar ── */}
+      <section className="card-base p-6">
         <div className="flex items-center justify-between gap-4 mb-5">
           <div>
-            <h2
-              className="text-lg font-semibold"
-              style={{ fontFamily: "var(--font-sans)" }}
-            >
-              Publicar ou agendar
-            </h2>
-            <p
-              className="text-sm mt-1"
-              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-            >
+            <h2 className="text-lg font-semibold">Publicar ou agendar</h2>
+            <p className="page-subtitle">
               Escolha uma conta conectada e dispare agora ou no horário exato.
             </p>
           </div>
-          {isPending && <Loader2 className="animate-spin" size={18} />}
+          {isPending && (
+            <Loader2 className="animate-spin text-muted-foreground" size={18} />
+          )}
         </div>
 
-        <div
-          className="rounded-2xl px-4 py-3 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(248,245,239,1) 0%, rgba(243,239,232,1) 100%)",
-            border: "1px solid #e4e0d8",
-          }}
-        >
+        {/* Rede ativa */}
+        <div className="rounded-2xl px-4 py-3 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-secondary border border-border">
           <div>
-            <p
-              className="text-xs font-semibold uppercase tracking-wide"
-              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-            >
-              Rede ativa
-            </p>
-            <p
-              className="text-sm mt-1 font-medium"
-              style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
-            >
+            <p className="section-label mb-0.5">Rede ativa</p>
+            <p className="text-sm font-medium text-foreground">
               {selectedNetworkMeta.label} • {selectedNetworkConnectionsCount}{" "}
               conta(s) conectada(s)
             </p>
           </div>
-          <Link
-            href="/settings"
-            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium"
-            style={{
-              backgroundColor: "#0a0a0a",
-              color: "#f8f5ef",
-              fontFamily: "var(--font-body)",
-            }}
-          >
+          <Link href="/settings" className="btn-primary shrink-0">
             Gerenciar conexões
             <ArrowRight size={13} />
           </Link>
@@ -432,71 +423,6 @@ export default function SocialPage() {
                 : "transition-all"
             }
           >
-            <div
-              className="rounded-2xl p-3 mb-3"
-              style={{
-                backgroundColor: "#f8f5ef",
-                border: "1px solid #e4e0d8",
-                opacity: publishBlocked ? 0.7 : 1,
-              }}
-            >
-              <p
-                className="text-xs font-medium mb-2"
-                style={{ color: "#6b6258", fontFamily: "var(--font-body)" }}
-              >
-                Modo de envio
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPublishForm((current) => ({
-                      ...current,
-                      deliveryMode: "now",
-                      publishAt: "",
-                    }))
-                  }
-                  className="rounded-xl px-3 py-2 text-xs font-medium"
-                  style={{
-                    backgroundColor:
-                      publishForm.deliveryMode === "now"
-                        ? "#0a0a0a"
-                        : "#ece7de",
-                    color:
-                      publishForm.deliveryMode === "now"
-                        ? "#f8f5ef"
-                        : "#0a0a0a",
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  Publicar agora
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPublishForm((current) => ({
-                      ...current,
-                      deliveryMode: "schedule",
-                    }))
-                  }
-                  className="rounded-xl px-3 py-2 text-xs font-medium"
-                  style={{
-                    backgroundColor:
-                      publishForm.deliveryMode === "schedule"
-                        ? "#0a0a0a"
-                        : "#ece7de",
-                    color:
-                      publishForm.deliveryMode === "schedule"
-                        ? "#f8f5ef"
-                        : "#0a0a0a",
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  Agendar
-                </button>
-              </div>
-            </div>
-
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -514,12 +440,7 @@ export default function SocialPage() {
                       connectionId: "",
                     }))
                   }
-                  className="rounded-2xl px-4 py-3 text-sm"
-                  style={{
-                    backgroundColor: "#f8f5ef",
-                    border: "1px solid #e4e0d8",
-                    fontFamily: "var(--font-body)",
-                  }}
+                  className="input-field"
                 >
                   {NETWORKS.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -535,12 +456,7 @@ export default function SocialPage() {
                       connectionId: event.target.value,
                     }))
                   }
-                  className="rounded-2xl px-4 py-3 text-sm"
-                  style={{
-                    backgroundColor: "#f8f5ef",
-                    border: "1px solid #e4e0d8",
-                    fontFamily: "var(--font-body)",
-                  }}
+                  className="input-field"
                 >
                   <option value="">Usar conexão mais recente da rede</option>
                   {filteredConnections.map((connection) => (
@@ -551,7 +467,8 @@ export default function SocialPage() {
                 </select>
               </div>
 
-              <div className="flex gap-2">
+              {/* Fonte do conteúdo */}
+              <div className="pill-bar w-fit">
                 {(
                   [
                     { id: "manual", label: "Escrever agora" },
@@ -567,14 +484,11 @@ export default function SocialPage() {
                         source: item.id,
                       }))
                     }
-                    className="rounded-xl px-3 py-2 text-xs font-medium"
-                    style={{
-                      backgroundColor:
-                        publishForm.source === item.id ? "#0a0a0a" : "#f0ede7",
-                      color:
-                        publishForm.source === item.id ? "#f8f5ef" : "#0a0a0a",
-                      fontFamily: "var(--font-body)",
-                    }}
+                    className={`pill-item ${
+                      publishForm.source === item.id
+                        ? "pill-item-active"
+                        : "pill-item-inactive"
+                    }`}
                   >
                     {item.label}
                   </button>
@@ -590,12 +504,7 @@ export default function SocialPage() {
                       postId: event.target.value,
                     }))
                   }
-                  className="w-full rounded-2xl px-4 py-3 text-sm"
-                  style={{
-                    backgroundColor: "#f8f5ef",
-                    border: "1px solid #e4e0d8",
-                    fontFamily: "var(--font-body)",
-                  }}
+                  className="input-field"
                 >
                   <option value="">Selecione um post gerado</option>
                   {posts.map((post) => (
@@ -615,12 +524,7 @@ export default function SocialPage() {
                   }
                   placeholder="Texto do post"
                   rows={5}
-                  className="w-full rounded-2xl px-4 py-3 text-sm"
-                  style={{
-                    backgroundColor: "#f8f5ef",
-                    border: "1px solid #e4e0d8",
-                    fontFamily: "var(--font-body)",
-                  }}
+                  className="textarea-field"
                 />
               )}
 
@@ -633,97 +537,139 @@ export default function SocialPage() {
                   }))
                 }
                 placeholder="Link opcional"
-                className="w-full rounded-2xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #e4e0d8",
-                  fontFamily: "var(--font-body)",
-                }}
+                className="input-field"
               />
 
               {(publishForm.network === "instagram" ||
                 publishForm.network === "facebook") && (
-                <textarea
-                  value={publishForm.mediaUrls}
+                <div className="space-y-2">
+                  <div
+                    className="rounded-2xl border-2 border-dashed border-border p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-foreground/40 transition-colors"
+                    onClick={() => mediaInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const files = Array.from(e.dataTransfer.files).filter(
+                        (f) => f.type.startsWith("image/"),
+                      );
+                      if (files.length > 0) void handleMediaSelect(files);
+                    }}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
+                      <Upload size={18} className="text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      Adicionar imagem
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Clique ou arraste um arquivo (jpeg, png, webp)
+                    </p>
+                    <input
+                      ref={mediaInputRef}
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (files.length > 0) void handleMediaSelect(files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                  {mediaFileItems.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {mediaFileItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="relative rounded-xl overflow-hidden border border-border"
+                          style={{ aspectRatio: "1" }}
+                        >
+                          {item.url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.url}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-secondary">
+                              {item.uploading ? (
+                                <Loader2
+                                  size={16}
+                                  className="animate-spin text-muted-foreground"
+                                />
+                              ) : (
+                                <ImageIcon
+                                  size={16}
+                                  className="text-muted-foreground"
+                                />
+                              )}
+                              {item.error && (
+                                <p className="text-[10px] text-red-500 text-center px-1">
+                                  {item.error}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {!item.uploading && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMediaFileItems((prev) =>
+                                  prev.filter((f) => f.id !== item.id),
+                                )
+                              }
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-foreground/70 flex items-center justify-center"
+                            >
+                              <X size={10} className="text-background" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <input
+                  type="datetime-local"
+                  value={publishForm.publishAt}
                   onChange={(event) =>
                     setPublishForm((current) => ({
                       ...current,
-                      mediaUrls: event.target.value,
+                      publishAt: event.target.value,
                     }))
                   }
-                  placeholder="Uma URL pública de mídia por linha"
-                  rows={4}
-                  className="w-full rounded-2xl px-4 py-3 text-sm"
-                  style={{
-                    backgroundColor: "#f8f5ef",
-                    border: "1px solid #e4e0d8",
-                    fontFamily: "var(--font-body)",
-                  }}
+                  className="input-field"
+                  placeholder="Agendar para (opcional)"
                 />
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 items-center">
-                {publishForm.deliveryMode === "schedule" ? (
-                  <input
-                    type="datetime-local"
-                    value={publishForm.publishAt}
-                    onChange={(event) =>
-                      setPublishForm((current) => ({
-                        ...current,
-                        publishAt: event.target.value,
-                      }))
-                    }
-                    className="rounded-2xl px-4 py-3 text-sm"
-                    style={{
-                      backgroundColor: "#f8f5ef",
-                      border: "1px solid #e4e0d8",
-                      fontFamily: "var(--font-body)",
-                    }}
-                  />
-                ) : (
-                  <div
-                    className="rounded-2xl px-4 py-3 text-sm"
-                    style={{
-                      backgroundColor: "#f8f5ef",
-                      border: "1px dashed #d9d3ca",
-                      color: "#8c8880",
-                      fontFamily: "var(--font-body)",
-                    }}
+                <p className="text-xs text-muted-foreground">
+                  Preencha a data para agendar, ou deixe vazio para publicar
+                  agora.
+                </p>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    type="submit"
+                    disabled={publishBlocked}
+                    className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Envio imediato habilitado.
-                  </div>
-                )}
-                <button
-                  type="submit"
-                  disabled={publishBlocked}
-                  className="rounded-xl px-3 py-2 text-xs font-medium inline-flex items-center justify-center gap-1.5"
-                  style={{
-                    backgroundColor: publishBlocked ? "#d9d3ca" : "#0a0a0a",
-                    color: publishBlocked ? "#8c8880" : "#f8f5ef",
-                    fontFamily: "var(--font-body)",
-                    cursor: publishBlocked ? "not-allowed" : "pointer",
-                  }}
-                >
-                  <Send size={15} />
-                  Publicar agora
-                </button>
-                <button
-                  type="button"
-                  disabled={publishBlocked}
-                  onClick={() => {
-                    void handlePublishSubmit("schedule");
-                  }}
-                  className="rounded-xl px-3 py-2 text-xs font-medium inline-flex items-center justify-center gap-1.5"
-                  style={{
-                    backgroundColor: publishBlocked ? "#f0ede7" : "#ece7de",
-                    color: publishBlocked ? "#a09d98" : "#0a0a0a",
-                    fontFamily: "var(--font-body)",
-                    cursor: publishBlocked ? "not-allowed" : "pointer",
-                  }}
-                >
-                  <Radio size={15} />
-                  Agendar
-                </button>
+                    <Send size={15} />
+                    Publicar agora
+                  </button>
+                  <button
+                    type="button"
+                    disabled={publishBlocked}
+                    onClick={() => {
+                      void handlePublishSubmit("schedule");
+                    }}
+                    className="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Radio size={15} />
+                    Agendar
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -731,43 +677,27 @@ export default function SocialPage() {
           {publishBlocked && (
             <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
               <div
-                className="max-w-md w-full rounded-2xl p-5 text-sm"
+                className="max-w-md w-full rounded-2xl p-5 text-sm text-foreground"
                 style={{
-                  backgroundColor: "rgba(250, 247, 241, 0.9)",
+                  backgroundColor: "rgba(250, 247, 241, 0.92)",
                   border: "1px solid rgba(228, 224, 216, 0.9)",
                   boxShadow: "0 16px 40px rgba(10,10,10,0.08)",
                   backdropFilter: "blur(8px)",
-                  color: "#4a433b",
-                  fontFamily: "var(--font-body)",
                 }}
               >
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
-                  style={{ backgroundColor: "#f0ede7" }}
-                >
-                  <Lock size={16} style={{ color: "#6b6258" }} />
+                <div className="icon-box mb-3">
+                  <Lock size={16} className="text-muted-foreground" />
                 </div>
-                <p
-                  className="font-semibold text-base"
-                  style={{ color: "#0a0a0a" }}
-                >
+                <p className="font-semibold text-base text-foreground">
                   {!hasAnyConnections
                     ? "Nenhuma conta conectada"
                     : `Sem conta ${networkMeta(publishForm.network).label} conectada`}
                 </p>
-                <p className="mt-1.5" style={{ color: "#6b6258" }}>
+                <p className="mt-1.5 text-muted-foreground">
                   Conecte uma conta em Configurações para liberar publicação e
                   agendamento nesta rede.
                 </p>
-                <Link
-                  href="/settings"
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium"
-                  style={{
-                    backgroundColor: "#0a0a0a",
-                    color: "#f8f5ef",
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
+                <Link href="/settings" className="btn-primary mt-4">
                   Ir para Configurações
                   <ArrowRight size={13} />
                 </Link>
@@ -777,45 +707,22 @@ export default function SocialPage() {
         </div>
       </section>
 
-      <section
-        className="rounded-2xl p-6"
-        style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
-      >
+      {/* ── Fila de publicação ── */}
+      <section className="card-base p-6">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div>
-            <h2
-              className="text-lg font-semibold"
-              style={{ fontFamily: "var(--font-sans)" }}
-            >
-              Fila de publicação
-            </h2>
-            <p
-              className="text-sm mt-1"
-              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-            >
-              Acompanhe o que já saiu e o que está agendado, com visual mais
-              limpo.
+            <h2 className="text-lg font-semibold">Fila de publicação</h2>
+            <p className="page-subtitle">
+              Acompanhe o que já saiu e o que está agendado.
             </p>
           </div>
-          <button
-            onClick={refreshData}
-            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium"
-            style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
-          >
+          <button onClick={refreshData} className="btn-secondary">
             Atualizar
           </button>
         </div>
 
         {failedJobsCount > 0 && (
-          <div
-            className="rounded-2xl px-4 py-3 mb-3 text-sm"
-            style={{
-              backgroundColor: "#fff7ed",
-              border: "1px solid #f5d9ba",
-              color: "#9a3412",
-              fontFamily: "var(--font-body)",
-            }}
-          >
+          <div className="banner-warning mb-3">
             {failedJobsCount} publicação(ões) falharam recentemente. Atualize a
             fila após ajustar a conexão.
           </div>
@@ -823,29 +730,19 @@ export default function SocialPage() {
 
         <div className="space-y-3">
           {jobs.length === 0 ? (
-            <p
-              className="text-sm"
-              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-            >
+            <p className="text-sm text-muted-foreground">
               Nenhum job criado ainda.
             </p>
           ) : (
             visibleJobs.map((job) => (
               <div
                 key={job.id}
-                className="rounded-2xl px-4 py-4"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #ece7de",
-                }}
+                className="rounded-2xl px-4 py-4 bg-background border border-border"
               >
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className="text-sm font-semibold"
-                        style={{ fontFamily: "var(--font-body)" }}
-                      >
+                      <span className="text-sm font-semibold text-foreground">
                         {networkMeta(job.network).label}
                       </span>
                       <span
@@ -868,26 +765,13 @@ export default function SocialPage() {
                         {statusLabel(job.status)}
                       </span>
                     </div>
-                    <p
-                      className="text-sm mt-2"
-                      style={{
-                        color: "#0a0a0a",
-                        fontFamily: "var(--font-body)",
-                      }}
-                    >
+                    <p className="text-sm mt-2 text-foreground">
                       {job.payload.title ? `${job.payload.title} • ` : ""}
                       {job.payload.text?.slice(0, 140) ||
                         "Post sem preview textual"}
                     </p>
                     {job.status === "failed" && job.error_message && (
-                      <div
-                        className="flex items-start gap-2 mt-2 rounded-xl px-3 py-2 text-xs"
-                        style={{
-                          backgroundColor: "#fde8e8",
-                          color: "#b91c1c",
-                          fontFamily: "var(--font-body)",
-                        }}
-                      >
+                      <div className="flex items-start gap-2 mt-2 rounded-xl px-3 py-2 text-xs banner-error">
                         <AlertTriangle
                           size={12}
                           strokeWidth={2}
@@ -896,13 +780,7 @@ export default function SocialPage() {
                         <span>{job.error_message}</span>
                       </div>
                     )}
-                    <div
-                      className="flex flex-wrap gap-4 mt-3 text-xs"
-                      style={{
-                        color: "#8c8880",
-                        fontFamily: "var(--font-body)",
-                      }}
-                    >
+                    <div className="flex flex-wrap gap-4 mt-3 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <Radio size={12} /> Agendado:{" "}
                         {formatDate(job.scheduled_for)}
@@ -924,12 +802,7 @@ export default function SocialPage() {
             <button
               type="button"
               onClick={() => setVisibleJobsCount((current) => current + 3)}
-              className="rounded-xl px-3 py-2 text-xs inline-flex items-center gap-1.5 font-medium"
-              style={{
-                backgroundColor: "#ece7de",
-                color: "#0a0a0a",
-                fontFamily: "var(--font-body)",
-              }}
+              className="btn-secondary"
             >
               <ChevronDown size={14} />
               Carregar mais 3 ({hiddenJobsCount} restantes)

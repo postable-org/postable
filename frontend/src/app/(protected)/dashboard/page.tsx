@@ -23,33 +23,20 @@ function StatCard({
   accent?: string;
 }) {
   return (
-    <div
-      className="rounded-2xl p-5 flex flex-col gap-3"
-      style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
-    >
+    <div className="card-base p-5 flex flex-col gap-3">
       <div
         className="w-9 h-9 rounded-xl flex items-center justify-center"
-        style={{ backgroundColor: accent ? `${accent}15` : "#f0ede7" }}
+        style={{ backgroundColor: accent ? `${accent}15` : "var(--secondary)" }}
       >
         <Icon
           size={18}
           strokeWidth={1.8}
-          style={{ color: accent ?? "#0a0a0a" }}
+          style={{ color: accent ?? "var(--foreground)" }}
         />
       </div>
       <div>
-        <p
-          className="text-2xl font-bold tracking-tight"
-          style={{ fontFamily: "var(--font-sans)" }}
-        >
-          {value}
-        </p>
-        <p
-          className="text-xs mt-0.5"
-          style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-        >
-          {label}
-        </p>
+        <p className="text-2xl font-bold tracking-tight">{value}</p>
+        <p className="text-xs mt-0.5 text-muted-foreground">{label}</p>
       </div>
     </div>
   );
@@ -200,29 +187,16 @@ export default function DashboardPage() {
         />
       )}
 
-      <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+      <div className="page-container">
         {/* ── Header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="page-header">
           <div>
-            <p
-              className="text-sm capitalize"
-              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-            >
-              {today}
-            </p>
-            <h1
-              className="text-3xl font-bold tracking-tight mt-1"
-              style={{ fontFamily: "var(--font-sans)" }}
-            >
-              Visão Geral
-            </h1>
+            <p className="text-sm capitalize text-muted-foreground">{today}</p>
+            <h1 className="page-title mt-1">Visão Geral</h1>
           </div>
 
-          {/* Toggle de modo — mesmo padrão pill */}
-          <div
-            className="flex items-center gap-0.5 p-1 rounded-xl"
-            style={{ backgroundColor: "#f0ede7" }}
-          >
+          {/* Toggle de modo */}
+          <div className="pill-bar">
             {(
               [
                 { id: "quick", label: "Gerar Posts", Icon: Zap },
@@ -232,12 +206,9 @@ export default function DashboardPage() {
               <button
                 key={id}
                 onClick={() => setMode(id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                style={{
-                  backgroundColor: mode === id ? "#0a0a0a" : "transparent",
-                  color: mode === id ? "#f8f5ef" : "#8c8880",
-                  fontFamily: "var(--font-body)",
-                }}
+                className={`pill-item flex items-center gap-1.5 ${
+                  mode === id ? "pill-item-active" : "pill-item-inactive"
+                }`}
               >
                 <Icon size={13} strokeWidth={mode === id ? 2.5 : 1.8} />
                 {label}
@@ -282,25 +253,13 @@ export default function DashboardPage() {
         {mode === "quick" ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-5">
-              {/* Generate card — dark inversion mantida para destaque */}
-              <div
-                className="rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-                style={{ backgroundColor: "#0a0a0a" }}
-              >
+              {/* Generate card */}
+              <div className="card-dark rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                  <p
-                    className="font-semibold text-base"
-                    style={{ color: "#f8f5ef", fontFamily: "var(--font-sans)" }}
-                  >
+                  <p className="font-semibold text-base text-primary-foreground">
                     Gerar novo post
                   </p>
-                  <p
-                    className="text-xs mt-1"
-                    style={{
-                      color: "rgba(248,245,239,0.45)",
-                      fontFamily: "var(--font-body)",
-                    }}
-                  >
+                  <p className="text-xs mt-1" style={{ color: "rgba(248,245,239,0.45)" }}>
                     A IA analisa seus concorrentes e cria conteúdo otimizado.
                   </p>
                 </div>
@@ -315,10 +274,7 @@ export default function DashboardPage() {
 
               {pendingPosts.length > 0 && (
                 <div className="space-y-3">
-                  <h2
-                    className="text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-                  >
+                  <h2 className="section-label">
                     Aguardando aprovação ({pendingPosts.length})
                   </h2>
                   <div className="space-y-3">
@@ -335,23 +291,10 @@ export default function DashboardPage() {
               )}
 
               {pendingPosts.length === 0 && posts.length === 0 && (
-                <div
-                  className="rounded-2xl p-10 text-center"
-                  style={{ border: "1.5px dashed #e4e0d8" }}
-                >
-                  <p className="text-3xl mb-3" style={{ opacity: 0.4 }}>
-                    ✦
-                  </p>
-                  <p
-                    className="text-sm font-medium"
-                    style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
-                  >
-                    Nenhum post ainda
-                  </p>
-                  <p
-                    className="text-xs mt-1"
-                    style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-                  >
+                <div className="empty-box">
+                  <p className="text-3xl mb-3 opacity-40">✦</p>
+                  <p className="text-sm font-medium text-foreground">Nenhum post ainda</p>
+                  <p className="text-xs mt-1 text-muted-foreground">
                     Clique em &quot;Gerar novo post&quot; para começar.
                   </p>
                 </div>
@@ -360,21 +303,9 @@ export default function DashboardPage() {
 
             {/* Approved column */}
             <div className="space-y-4">
-              <h2
-                className="text-xs font-semibold uppercase tracking-wider"
-                style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-              >
-                Posts aprovados
-              </h2>
+              <h2 className="section-label">Posts aprovados</h2>
               {approvedPosts.slice(0, 3).map((post) => (
-                <div
-                  key={post.id}
-                  className="rounded-2xl p-4"
-                  style={{
-                    backgroundColor: "#ffffff",
-                    border: "1.5px solid #e4e0d8",
-                  }}
-                >
+                <div key={post.id} className="card-base p-4">
                   {post.image_url && (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
@@ -384,26 +315,10 @@ export default function DashboardPage() {
                       style={{ aspectRatio: "1", maxHeight: "120px" }}
                     />
                   )}
-                  <p
-                    className="text-xs line-clamp-3"
-                    style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
-                  >
-                    {post.post_text}
-                  </p>
+                  <p className="text-xs line-clamp-3 text-foreground">{post.post_text}</p>
                   <div className="flex items-center gap-2 mt-3">
-                    <div
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: "#10B981" }}
-                    />
-                    <span
-                      className="text-xs"
-                      style={{
-                        color: "#8c8880",
-                        fontFamily: "var(--font-body)",
-                      }}
-                    >
-                      Aprovado
-                    </span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                    <span className="text-xs text-muted-foreground">Aprovado</span>
                   </div>
                 </div>
               ))}
