@@ -88,12 +88,16 @@ func (s *SocialOAuthService) StartAuthorization(ctx context.Context, userID, net
 		if clientID == "" {
 			return "", missingOAuthConfig("linkedin", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET")
 		}
+		scopes := []string{"openid", "profile", "email", "w_member_social"}
+		if oauthBoolEnv("LINKEDIN_ENABLE_OFFLINE_ACCESS") {
+			scopes = append(scopes, "offline_access")
+		}
 		query := url.Values{}
 		query.Set("response_type", "code")
 		query.Set("client_id", clientID)
 		query.Set("redirect_uri", s.callbackURL(network))
 		query.Set("state", state)
-		query.Set("scope", "openid profile email w_member_social")
+		query.Set("scope", strings.Join(scopes, " "))
 		return "https://www.linkedin.com/oauth/v2/authorization?" + query.Encode(), nil
 	case SocialNetworkFacebook, SocialNetworkInstagram:
 		appID := os.Getenv("FACEBOOK_APP_ID")
@@ -195,13 +199,13 @@ func (s *SocialOAuthService) completeXOAuth(ctx context.Context, userID, code, c
 		}
 	}
 
-	profileURL := "https://api.x.com/2/users/me?user.fields=username,name"
+	profileURL := "https://api.x.com/2/users/me?user.fields=username,name,profile_image_url"
 	raw, status, _, err := doJSONRequest(ctx, s.httpClient, http.MethodGet, profileURL, token.AccessToken, nil, nil)
 	if err != nil {
 		return err
 	}
 	if status < 200 || status >= 300 {
-		fallbackURL := "https://api.twitter.com/2/users/me?user.fields=username,name"
+		fallbackURL := "https://api.twitter.com/2/users/me?user.fields=username,name,profile_image_url"
 		raw, status, _, err = doJSONRequest(ctx, s.httpClient, http.MethodGet, fallbackURL, token.AccessToken, nil, nil)
 		if err != nil {
 			return err
@@ -213,9 +217,10 @@ func (s *SocialOAuthService) completeXOAuth(ctx context.Context, userID, code, c
 
 	var profile struct {
 		Data struct {
-			ID       string `json:"id"`
-			Name     string `json:"name"`
-			Username string `json:"username"`
+			ID              string `json:"id"`
+			Name            string `json:"name"`
+			Username        string `json:"username"`
+			ProfileImageURL string `json:"profile_image_url"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &profile); err != nil {
@@ -235,10 +240,14 @@ func (s *SocialOAuthService) completeXOAuth(ctx context.Context, userID, code, c
 	}
 
 	expiresAt := expiresAtPtr(token.ExpiresIn)
-	metadata, _ := json.Marshal(map[string]string{
+	metaMap := map[string]string{
 		"provider": "x",
 		"scope":    token.Scope,
-	})
+	}
+	if avatarURL := strings.TrimSpace(profile.Data.ProfileImageURL); avatarURL != "" {
+		metaMap["avatar_url"] = avatarURL
+	}
+	metadata, _ := json.Marshal(metaMap)
 	_, err = s.social.UpsertConnection(ctx, userID, SocialConnectionInput{
 		Network:        SocialNetworkX,
 		AccountID:      profile.Data.ID,
@@ -276,15 +285,20 @@ func (s *SocialOAuthService) completeLinkedInOAuth(ctx context.Context, userID, 
 		return fmt.Errorf("linkedin userinfo failed: status=%d body=%s", status, string(raw))
 	}
 	var profile struct {
-		Sub   string `json:"sub"`
-		Name  string `json:"name"`
-		Email string `json:"email"`
+		Sub     string `json:"sub"`
+		Name    string `json:"name"`
+		Email   string `json:"email"`
+		Picture string `json:"picture"`
 	}
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return err
 	}
 	expiresAt := expiresAtPtr(token.ExpiresIn)
-	metadata, _ := json.Marshal(map[string]string{"email": profile.Email})
+	metaMap := map[string]string{"email": profile.Email}
+	if avatarURL := strings.TrimSpace(profile.Picture); avatarURL != "" {
+		metaMap["avatar_url"] = avatarURL
+	}
+	metadata, _ := json.Marshal(metaMap)
 	_, err = s.social.UpsertConnection(ctx, userID, SocialConnectionInput{
 		Network:        SocialNetworkLinkedIn,
 		AccountID:      "urn:li:person:" + profile.Sub,
@@ -406,7 +420,10 @@ func (s *SocialOAuthService) completeMetaOAuth(ctx context.Context, userID, code
 	}
 	connected := 0
 	for _, page := range pages.Data {
-		pageMeta, _ := json.Marshal(map[string]string{"source": "facebook_page"})
+		pageMeta, _ := json.Marshal(map[string]string{
+			"source":     "facebook_page",
+			"avatar_url": "https://graph.facebook.com/v25.0/" + page.ID + "/picture?type=normal",
+		})
 		_, err := s.social.UpsertConnection(ctx, userID, SocialConnectionInput{
 			Network:      SocialNetworkFacebook,
 			AccountID:    page.ID,
@@ -423,7 +440,23 @@ func (s *SocialOAuthService) completeMetaOAuth(ctx context.Context, userID, code
 			ig = page.ConnectedInstagramAccount
 		}
 		if ig != nil && ig.ID != "" {
-			igMeta, _ := json.Marshal(map[string]string{"page_id": page.ID, "page_name": page.Name})
+			avatarURL := ""
+			igProfileURL := "https://graph.facebook.com/v25.0/" + ig.ID + "?fields=profile_picture_url"
+			igRaw, igStatus, _, igErr := doJSONRequest(ctx, s.httpClient, http.MethodGet, igProfileURL, page.AccessToken, nil, nil)
+			if igErr == nil && igStatus >= 200 && igStatus < 300 {
+				var igProfile struct {
+					ProfilePictureURL string `json:"profile_picture_url"`
+				}
+				if err := json.Unmarshal(igRaw, &igProfile); err == nil {
+					avatarURL = strings.TrimSpace(igProfile.ProfilePictureURL)
+				}
+			}
+
+			igMeta, _ := json.Marshal(map[string]string{
+				"page_id":    page.ID,
+				"page_name":  page.Name,
+				"avatar_url": avatarURL,
+			})
 			_, err := s.social.UpsertConnection(ctx, userID, SocialConnectionInput{
 				Network:      SocialNetworkInstagram,
 				AccountID:    ig.ID,
@@ -563,6 +596,120 @@ func (s *SocialOAuthService) FrontendRedirect(network, status, message string) s
 		return s.successRedirect(network, message)
 	}
 	return s.errorRedirect(network, message)
+}
+
+// RefreshTokenIfNeeded implements TokenRefresher. For X, if the access token is
+// expired (or expires within 5 minutes) and a refresh token is available, it
+// exchanges the refresh token for a new access token and updates the DB + conn
+// in-place. Other networks are silently skipped (LinkedIn tokens last 60 days;
+// Meta issues long-lived tokens separately).
+func (s *SocialOAuthService) RefreshTokenIfNeeded(ctx context.Context, conn *SocialConnection) error {
+	if conn.RefreshToken == "" {
+		return nil
+	}
+	// Skip if token is still valid for at least 5 more minutes.
+	if conn.TokenExpiresAt != nil && conn.TokenExpiresAt.After(time.Now().Add(5*time.Minute)) {
+		return nil
+	}
+	switch conn.Network {
+	case SocialNetworkX:
+		return s.refreshXToken(ctx, conn)
+	case SocialNetworkLinkedIn:
+		return s.refreshLinkedInToken(ctx, conn)
+	}
+	return nil
+}
+
+func (s *SocialOAuthService) refreshLinkedInToken(ctx context.Context, conn *SocialConnection) error {
+	clientID := strings.TrimSpace(os.Getenv("LINKEDIN_CLIENT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("LINKEDIN_CLIENT_SECRET"))
+	if clientID == "" || clientSecret == "" {
+		return missingOAuthConfig("linkedin", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET")
+	}
+
+	token, err := s.exchangeFormToken(ctx, "https://www.linkedin.com/oauth/v2/accessToken", url.Values{
+		"grant_type":    []string{"refresh_token"},
+		"refresh_token": []string{conn.RefreshToken},
+		"client_id":     []string{clientID},
+		"client_secret": []string{clientSecret},
+	}, nil)
+	if err != nil {
+		return fmt.Errorf("linkedin token refresh failed: %w", err)
+	}
+
+	newRefreshToken := conn.RefreshToken
+	if token.RefreshToken != "" {
+		newRefreshToken = token.RefreshToken
+	}
+	expiresAt := expiresAtPtr(token.ExpiresIn)
+
+	_, err = s.social.UpsertConnection(ctx, conn.UserID, SocialConnectionInput{
+		Network:        conn.Network,
+		AccountID:      conn.AccountID,
+		AccountName:    conn.AccountName,
+		AccessToken:    token.AccessToken,
+		RefreshToken:   newRefreshToken,
+		TokenExpiresAt: expiresAt,
+		MetadataJSON:   conn.MetadataJSON,
+	})
+	if err != nil {
+		return fmt.Errorf("linkedin token refresh: failed to persist new token: %w", err)
+	}
+
+	conn.AccessToken = token.AccessToken
+	conn.RefreshToken = newRefreshToken
+	conn.TokenExpiresAt = expiresAt
+	return nil
+}
+
+func (s *SocialOAuthService) refreshXToken(ctx context.Context, conn *SocialConnection) error {
+	clientID := strings.TrimSpace(os.Getenv("X_CLIENT_ID"))
+	if clientID == "" {
+		return missingOAuthConfig("x", "X_CLIENT_ID")
+	}
+
+	extraHeaders := map[string]string{}
+	if clientSecret := strings.TrimSpace(os.Getenv("X_CLIENT_SECRET")); clientSecret != "" {
+		extraHeaders["Authorization"] = basicAuthValue(clientID, clientSecret)
+	}
+
+	form := url.Values{
+		"grant_type":    []string{"refresh_token"},
+		"refresh_token": []string{conn.RefreshToken},
+		"client_id":     []string{clientID},
+	}
+
+	token, err := s.exchangeFormToken(ctx, "https://api.x.com/2/oauth2/token", form, extraHeaders)
+	if err != nil {
+		token, err = s.exchangeFormToken(ctx, "https://api.twitter.com/2/oauth2/token", form, extraHeaders)
+		if err != nil {
+			return fmt.Errorf("x token refresh failed: %w", err)
+		}
+	}
+
+	newRefreshToken := conn.RefreshToken
+	if token.RefreshToken != "" {
+		newRefreshToken = token.RefreshToken
+	}
+	expiresAt := expiresAtPtr(token.ExpiresIn)
+
+	_, err = s.social.UpsertConnection(ctx, conn.UserID, SocialConnectionInput{
+		Network:        conn.Network,
+		AccountID:      conn.AccountID,
+		AccountName:    conn.AccountName,
+		AccessToken:    token.AccessToken,
+		RefreshToken:   newRefreshToken,
+		TokenExpiresAt: expiresAt,
+		MetadataJSON:   conn.MetadataJSON,
+	})
+	if err != nil {
+		return fmt.Errorf("x token refresh: failed to persist new token: %w", err)
+	}
+
+	conn.AccessToken = token.AccessToken
+	conn.RefreshToken = newRefreshToken
+	conn.TokenExpiresAt = expiresAt
+	return nil
 }
 
 func expiresAtPtr(expiresIn int64) *time.Time {

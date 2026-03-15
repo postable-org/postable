@@ -89,8 +89,9 @@ O X já suporta conexão via OAuth oficial:
 1. Crie um app em [LinkedIn Developers](https://www.linkedin.com/developers/).
 2. Adicione o produto de login compatível com OpenID Connect e o produto de compartilhamento no LinkedIn.
 3. Cadastre o redirect URI: `{API_BASE_URL}/api/social/oauth/linkedin/callback`.
-4. Garanta os escopos: `openid profile email w_member_social`.
-5. Configure `LINKEDIN_CLIENT_ID` e `LINKEDIN_CLIENT_SECRET` no `.env`.
+4. Garanta os escopos base: `openid profile email w_member_social`.
+5. (Opcional) Para refresh token automático, habilite também `offline_access` no app e configure `LINKEDIN_ENABLE_OFFLINE_ACCESS=true` no `.env`.
+6. Configure `LINKEDIN_CLIENT_ID` e `LINKEDIN_CLIENT_SECRET` no `.env`.
 
 - LinkedIn: `{API_BASE_URL}/api/social/oauth/linkedin/callback`
 

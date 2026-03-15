@@ -2,32 +2,33 @@
 
 import { getPosts, type Post } from "@/lib/api/posts";
 import {
-    deleteSocialConnection,
-    getSocialConnections,
-    getSocialJobs,
-    publishSocialPost,
-    startSocialOAuth,
-    type SocialConnection,
-    type SocialJob,
-    type SocialNetwork,
+  deleteSocialConnection,
+  getSocialConnections,
+  getSocialJobs,
+  publishSocialPost,
+  startSocialOAuth,
+  type SocialConnection,
+  type SocialJob,
+  type SocialNetwork,
 } from "@/lib/api/social";
 import {
-    CheckCircle,
-    Facebook,
-    Instagram,
-    Linkedin,
-    Loader2,
-    Radio,
-    Send,
-    Trash2,
-    Twitter,
+  CheckCircle,
+  ChevronDown,
+  Facebook,
+  Instagram,
+  Linkedin,
+  Loader2,
+  Radio,
+  Send,
+  Trash2,
+  Twitter,
 } from "lucide-react";
 import {
-    useEffect,
-    useMemo,
-    useState,
-    useTransition,
-    type ElementType,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  type ElementType,
 } from "react";
 
 const NETWORKS: Array<{
@@ -67,8 +68,7 @@ const NETWORKS: Array<{
     id: "x",
     label: "X",
     color: "#111111",
-    description:
-      "Publica texto e foto.",
+    description: "Publica texto e foto.",
     oauth: "x",
     Icon: Twitter,
   },
@@ -127,9 +127,66 @@ function formatDate(date: string | null | undefined) {
   return new Date(date).toLocaleString("pt-BR");
 }
 
+function statusLabel(status: SocialJob["status"]) {
+  switch (status) {
+    case "queued":
+      return "Na fila";
+    case "processing":
+      return "Processando";
+    case "published":
+      return "Publicado";
+    case "failed":
+      return "Falhou";
+    default:
+      return status;
+  }
+}
+
+function readMetadataString(
+  metadata: SocialConnection["metadata_json"],
+  key: string,
+): string | null {
+  if (!metadata || typeof metadata !== "object") {
+    return null;
+  }
+  const value = metadata[key];
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function connectionAvatarURL(connection: SocialConnection): string | null {
+  const fromMetadata = readMetadataString(
+    connection.metadata_json,
+    "avatar_url",
+  );
+  if (fromMetadata) {
+    return fromMetadata;
+  }
+  if (connection.network === "facebook") {
+    return `https://graph.facebook.com/v25.0/${connection.account_id}/picture?type=normal`;
+  }
+  return null;
+}
+
+function accountInitials(connection: SocialConnection): string {
+  const source =
+    connection.account_name?.trim() || connection.account_id?.trim() || "Conta";
+  return (
+    source
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((chunk) => chunk[0]?.toUpperCase() ?? "")
+      .join("") || "C"
+  );
+}
+
 export default function SocialPage() {
   const [connections, setConnections] = useState<SocialConnection[]>([]);
   const [jobs, setJobs] = useState<SocialJob[]>([]);
+  const [visibleJobsCount, setVisibleJobsCount] = useState(3);
   const [posts, setPosts] = useState<Post[]>([]);
   const [activeNetwork, setActiveNetwork] =
     useState<SocialNetwork>("instagram");
@@ -174,6 +231,15 @@ export default function SocialPage() {
   );
   const activeNetworkMeta = networkMeta(activeNetwork);
   const oauthHelp = oauthGuide(activeNetworkMeta.oauth);
+  const visibleJobs = useMemo(
+    () => jobs.slice(0, visibleJobsCount),
+    [jobs, visibleJobsCount],
+  );
+  const hiddenJobsCount = Math.max(jobs.length - visibleJobs.length, 0);
+  const failedJobsCount = useMemo(
+    () => jobs.filter((job) => job.status === "failed").length,
+    [jobs],
+  );
 
   useEffect(() => {
     if (window.location.search.includes("status=")) {
@@ -190,6 +256,7 @@ export default function SocialPage() {
       .then(([connectionsData, jobsData, postsData]) => {
         setConnections(connectionsData);
         setJobs(jobsData);
+        setVisibleJobsCount(3);
         setPosts(postsData);
       })
       .catch((error: unknown) => {
@@ -209,6 +276,7 @@ export default function SocialPage() {
         .then(([connectionsData, jobsData]) => {
           setConnections(connectionsData);
           setJobs(jobsData);
+          setVisibleJobsCount(3);
         })
         .catch((error: unknown) => {
           setFeedback({
@@ -461,59 +529,88 @@ export default function SocialPage() {
               ) : (
                 connections
                   .filter((c) => c.network === activeNetwork)
-                  .map((connection) => (
-                    <div
-                      key={connection.id}
-                      className="rounded-2xl px-4 py-3"
-                      style={{
-                        backgroundColor: "#f8f5ef",
-                        border: "1px solid #ece7de",
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p
-                            className="text-sm font-medium"
-                            style={{ fontFamily: "var(--font-body)" }}
-                          >
-                            {connection.account_name || connection.account_id}
-                          </p>
-                          <p
-                            className="text-xs mt-1"
-                            style={{
-                              color: "#8c8880",
-                              fontFamily: "var(--font-body)",
+                  .map((connection) => {
+                    const avatarURL = connectionAvatarURL(connection);
+                    return (
+                      <div
+                        key={connection.id}
+                        className="rounded-2xl px-4 py-3"
+                        style={{
+                          backgroundColor: "#f8f5ef",
+                          border: "1px solid #ece7de",
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {avatarURL ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={avatarURL}
+                                alt={`Avatar de ${connection.account_name || connection.account_id}`}
+                                className="w-10 h-10 rounded-full object-cover border"
+                                style={{ borderColor: "#ddd6cb" }}
+                              />
+                            ) : (
+                              <div
+                                className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold"
+                                style={{
+                                  backgroundColor: "#ece7de",
+                                  color: "#4a433b",
+                                  fontFamily: "var(--font-body)",
+                                }}
+                              >
+                                {accountInitials(connection)}
+                              </div>
+                            )}
+
+                            <div className="min-w-0">
+                              <p
+                                className="text-sm font-medium truncate"
+                                style={{ fontFamily: "var(--font-body)" }}
+                              >
+                                {connection.account_name ||
+                                  connection.account_id}
+                              </p>
+                              <p
+                                className="text-xs mt-1"
+                                style={{
+                                  color: "#8c8880",
+                                  fontFamily: "var(--font-body)",
+                                }}
+                              >
+                                Expira em{" "}
+                                {formatDate(
+                                  connection.token_expires_at ?? null,
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await deleteSocialConnection(connection.id);
+                                setConnections((prev) =>
+                                  prev.filter((c) => c.id !== connection.id),
+                                );
+                              } catch (err) {
+                                setFeedback({
+                                  tone: "error",
+                                  text:
+                                    err instanceof Error
+                                      ? err.message
+                                      : "Falha ao desconectar",
+                                });
+                              }
                             }}
+                            className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-red-100"
+                            title="Desconectar"
                           >
-                            Expira em{" "}
-                            {formatDate(connection.token_expires_at ?? null)}
-                          </p>
+                            <Trash2 size={14} style={{ color: "#dc2626" }} />
+                          </button>
                         </div>
-                        <button
-                          onClick={async () => {
-                            try {
-                              await deleteSocialConnection(connection.id);
-                              setConnections((prev) =>
-                                prev.filter((c) => c.id !== connection.id),
-                              );
-                            } catch (err) {
-                              setFeedback({
-                                tone: "error",
-                                text:
-                                  err instanceof Error
-                                    ? err.message
-                                    : "Falha ao desconectar",
-                              });
-                            }
-                          }}
-                          className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-red-100"
-                          title="Desconectar"
-                        >
-                          <Trash2 size={14} style={{ color: "#dc2626" }} />
-                        </button>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
               )}
             </div>
           </div>
@@ -842,7 +939,8 @@ export default function SocialPage() {
               className="text-sm mt-1"
               style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
             >
-              Acompanhe o que já saiu, o que está agendado e o que falhou.
+              Acompanhe o que já saiu e o que está agendado, com visual mais
+              limpo.
             </p>
           </div>
           <button
@@ -854,6 +952,21 @@ export default function SocialPage() {
           </button>
         </div>
 
+        {failedJobsCount > 0 && (
+          <div
+            className="rounded-2xl px-4 py-3 mb-3 text-sm"
+            style={{
+              backgroundColor: "#fff7ed",
+              border: "1px solid #f5d9ba",
+              color: "#9a3412",
+              fontFamily: "var(--font-body)",
+            }}
+          >
+            {failedJobsCount} publicação(ões) falharam recentemente. Atualize a
+            fila após ajustar a conexão.
+          </div>
+        )}
+
         <div className="space-y-3">
           {jobs.length === 0 ? (
             <p
@@ -863,7 +976,7 @@ export default function SocialPage() {
               Nenhum job criado ainda.
             </p>
           ) : (
-            jobs.map((job) => (
+            visibleJobs.map((job) => (
               <div
                 key={job.id}
                 className="rounded-2xl px-4 py-4"
@@ -898,7 +1011,7 @@ export default function SocialPage() {
                                 : "#5b21b6",
                         }}
                       >
-                        {job.status}
+                        {statusLabel(job.status)}
                       </span>
                     </div>
                     <p
@@ -929,22 +1042,29 @@ export default function SocialPage() {
                       </span>
                     </div>
                   </div>
-                  {job.error_message && (
-                    <div
-                      className="text-xs max-w-sm"
-                      style={{
-                        color: "#b91c1c",
-                        fontFamily: "var(--font-body)",
-                      }}
-                    >
-                      {job.error_message}
-                    </div>
-                  )}
                 </div>
               </div>
             ))
           )}
         </div>
+
+        {hiddenJobsCount > 0 && (
+          <div className="pt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setVisibleJobsCount((current) => current + 3)}
+              className="rounded-2xl px-4 py-2 text-sm inline-flex items-center gap-2"
+              style={{
+                backgroundColor: "#ece7de",
+                color: "#0a0a0a",
+                fontFamily: "var(--font-body)",
+              }}
+            >
+              <ChevronDown size={14} />
+              Carregar mais 3 ({hiddenJobsCount} restantes)
+            </button>
+          </div>
+        )}
       </section>
     </div>
   );

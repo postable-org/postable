@@ -110,13 +110,24 @@ type SocialPublisher interface {
 	Publish(ctx context.Context, conn SocialConnection, payload SocialPublishPayload) (*PublishResult, error)
 }
 
+// TokenRefresher refreshes an expired OAuth access token in-place before publishing.
+// Only networks that support refresh tokens (currently X) need to implement this.
+type TokenRefresher interface {
+	RefreshTokenIfNeeded(ctx context.Context, conn *SocialConnection) error
+}
+
 type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
 type SocialService struct {
-	db         *pgxpool.Pool
-	publishers map[string]SocialPublisher
+	db             *pgxpool.Pool
+	publishers     map[string]SocialPublisher
+	tokenRefresher TokenRefresher
+}
+
+func (s *SocialService) SetTokenRefresher(r TokenRefresher) {
+	s.tokenRefresher = r
 }
 
 func NewSocialService(db *pgxpool.Pool, publishers map[string]SocialPublisher) *SocialService {
@@ -587,6 +598,12 @@ func (s *SocialService) executeJob(ctx context.Context, job SocialPostJob, conn 
 		WHERE id = $2
 	`, SocialJobProcessing, job.ID); err != nil {
 		return nil, err
+	}
+
+	if s.tokenRefresher != nil {
+		if err := s.tokenRefresher.RefreshTokenIfNeeded(ctx, &conn); err != nil {
+			slog.Warn("social publish: token refresh failed, continuing with existing token", "jobID", job.ID, "network", conn.Network, "error", err)
+		}
 	}
 
 	result, publishErr := publisher.Publish(ctx, conn, job.Payload)

@@ -113,6 +113,7 @@ func main() {
 	subSvc := service.NewSubscriptionService(dbPool)
 	socialSvc := service.NewSocialService(dbPool, nil)
 	socialOAuthSvc := service.NewSocialOAuthService(socialSvc)
+	socialSvc.SetTokenRefresher(socialOAuthSvc)
 	socialOAuthHandler := handler.NewSocialOAuthHandler(socialOAuthSvc)
 	r.Get("/api/social/oauth/{network}/callback", socialOAuthHandler.Callback)
 
