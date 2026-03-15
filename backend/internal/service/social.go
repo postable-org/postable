@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -36,7 +37,7 @@ var (
 	ErrSocialUnavailable     = errors.New("social publishing requires database")
 	ErrInvalidNetwork        = errors.New("invalid network: must be linkedin, facebook, instagram, or x")
 	ErrConnectionNotFound    = errors.New("social connection not found")
-	ErrPublishPayloadInvalid = errors.New("publish payload must include text")
+	ErrPublishPayloadInvalid = errors.New("invalid publish payload")
 	ErrPostTextNotFound      = errors.New("post content text not found")
 )
 
@@ -65,24 +66,36 @@ type SocialConnection struct {
 }
 
 type SocialPublishInput struct {
-	Network      string     `json:"network"`
-	ConnectionID string     `json:"connection_id,omitempty"`
-	PostID       string     `json:"post_id,omitempty"`
-	Title        string     `json:"title,omitempty"`
-	Subreddit    string     `json:"subreddit,omitempty"`
-	Text         string     `json:"text,omitempty"`
-	Link         string     `json:"link,omitempty"`
-	MediaURLs    []string   `json:"media_urls,omitempty"`
-	PublishAt    *time.Time `json:"publish_at,omitempty"`
+	Network          string     `json:"network"`
+	ConnectionID     string     `json:"connection_id,omitempty"`
+	PostID           string     `json:"post_id,omitempty"`
+	Title            string     `json:"title,omitempty"`
+	Subreddit        string     `json:"subreddit,omitempty"`
+	Text             string     `json:"text,omitempty"`
+	Link             string     `json:"link,omitempty"`
+	MediaURLs        []string   `json:"media_urls,omitempty"`
+	Hashtags         []string   `json:"hashtags,omitempty"`
+	Mentions         []string   `json:"mentions,omitempty"`
+	InstagramTags    []string   `json:"instagram_tags,omitempty"`
+	MusicTrack       string     `json:"music_track,omitempty"`
+	FacebookPostType string     `json:"facebook_post_type,omitempty"`
+	LinkedInPostType string     `json:"linkedin_post_type,omitempty"`
+	PublishAt        *time.Time `json:"publish_at,omitempty"`
 }
 
 type SocialPublishPayload struct {
-	Title     string   `json:"title,omitempty"`
-	Subreddit string   `json:"subreddit,omitempty"`
-	Text      string   `json:"text"`
-	Link      string   `json:"link,omitempty"`
-	MediaURLs []string `json:"media_urls,omitempty"`
-	PostID    string   `json:"post_id,omitempty"`
+	Title            string   `json:"title,omitempty"`
+	Subreddit        string   `json:"subreddit,omitempty"`
+	Text             string   `json:"text"`
+	Link             string   `json:"link,omitempty"`
+	MediaURLs        []string `json:"media_urls,omitempty"`
+	Hashtags         []string `json:"hashtags,omitempty"`
+	Mentions         []string `json:"mentions,omitempty"`
+	InstagramTags    []string `json:"instagram_tags,omitempty"`
+	MusicTrack       string   `json:"music_track,omitempty"`
+	FacebookPostType string   `json:"facebook_post_type,omitempty"`
+	LinkedInPostType string   `json:"linkedin_post_type,omitempty"`
+	PostID           string   `json:"post_id,omitempty"`
 }
 
 type SocialPostJob struct {
@@ -502,7 +515,7 @@ func fetchMetaInsights(ctx context.Context, client *http.Client, mediaID, access
 		}
 		var body struct {
 			Data []struct {
-				Name   string      `json:"name"`
+				Name   string `json:"name"`
 				Values []struct {
 					Value interface{} `json:"value"`
 				} `json:"values"`
@@ -545,11 +558,11 @@ func fetchLinkedInInsights(ctx context.Context, client *http.Client, shareID, ac
 	var body struct {
 		Elements []struct {
 			TotalShareStatistics struct {
-				ImpressionCount   int `json:"impressionCount"`
-				ClickCount        int `json:"clickCount"`
-				LikeCount         int `json:"likeCount"`
-				CommentCount      int `json:"commentCount"`
-				ShareCount        int `json:"shareCount"`
+				ImpressionCount        int `json:"impressionCount"`
+				ClickCount             int `json:"clickCount"`
+				LikeCount              int `json:"likeCount"`
+				CommentCount           int `json:"commentCount"`
+				ShareCount             int `json:"shareCount"`
 				UniqueImpressionsCount int `json:"uniqueImpressionsCount"`
 			} `json:"totalShareStatistics"`
 		} `json:"elements"`
@@ -651,12 +664,18 @@ func (s *SocialService) resolveConnection(ctx context.Context, userID, connectio
 
 func (s *SocialService) resolvePayload(ctx context.Context, userID string, in SocialPublishInput) (SocialPublishPayload, *string, error) {
 	payload := SocialPublishPayload{
-		Title:     strings.TrimSpace(in.Title),
-		Subreddit: normalizeSubreddit(in.Subreddit),
-		Text:      strings.TrimSpace(in.Text),
-		Link:      strings.TrimSpace(in.Link),
-		MediaURLs: in.MediaURLs,
-		PostID:    strings.TrimSpace(in.PostID),
+		Title:            strings.TrimSpace(in.Title),
+		Subreddit:        normalizeSubreddit(in.Subreddit),
+		Text:             strings.TrimSpace(in.Text),
+		Link:             strings.TrimSpace(in.Link),
+		MediaURLs:        trimStringSlice(in.MediaURLs),
+		Hashtags:         normalizeHashtags(in.Hashtags),
+		Mentions:         normalizeMentions(in.Mentions),
+		InstagramTags:    normalizeMentions(in.InstagramTags),
+		MusicTrack:       strings.TrimSpace(in.MusicTrack),
+		FacebookPostType: normalizeFacebookPostType(in.FacebookPostType),
+		LinkedInPostType: normalizeLinkedInPostType(in.LinkedInPostType, in.MediaURLs, in.Link),
+		PostID:           strings.TrimSpace(in.PostID),
 	}
 
 	var postIDPtr *string
@@ -665,24 +684,46 @@ func (s *SocialService) resolvePayload(ctx context.Context, userID string, in So
 		postIDPtr = &pid
 	}
 
-	if payload.Text == "" && payload.PostID != "" {
-		var content json.RawMessage
+	if payload.PostID != "" {
+		var postText string
+		var imageURL string
+		var postHashtags []string
 		err := s.db.QueryRow(ctx, `
-			SELECT content_json
+			SELECT COALESCE(post_text, ''), COALESCE(image_url, ''), COALESCE(hashtags, '{}')
 			FROM generated_posts
 			WHERE id = $1 AND user_id = $2
-		`, payload.PostID, userID).Scan(&content)
+		`, payload.PostID, userID).Scan(&postText, &imageURL, &postHashtags)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return SocialPublishPayload{}, nil, ErrPostNotFound
 			}
 			return SocialPublishPayload{}, nil, err
 		}
-		text := extractPostText(content)
-		if strings.TrimSpace(text) == "" {
-			return SocialPublishPayload{}, nil, ErrPostTextNotFound
+
+		if strings.TrimSpace(payload.Text) == "" {
+			text := strings.TrimSpace(postText)
+			if strings.TrimSpace(text) == "" {
+				return SocialPublishPayload{}, nil, ErrPostTextNotFound
+			}
+			payload.Text = text
 		}
-		payload.Text = text
+
+		if normalizeSocialNetwork(in.Network) == SocialNetworkInstagram {
+			// For generated posts on Instagram, prefer image_url from generated_posts.
+			// If the column is empty, keep any media_urls already sent by the client.
+			dbImageURL := strings.TrimSpace(imageURL)
+			if dbImageURL != "" {
+				payload.MediaURLs = []string{dbImageURL}
+			} else if len(payload.MediaURLs) == 0 || strings.TrimSpace(payload.MediaURLs[0]) == "" {
+				return SocialPublishPayload{}, nil, errors.New("generated post selected but image_url is empty in database and no media_urls were provided")
+			}
+		} else if len(payload.MediaURLs) == 0 && strings.TrimSpace(imageURL) != "" {
+			payload.MediaURLs = []string{strings.TrimSpace(imageURL)}
+		}
+
+		if len(payload.Hashtags) == 0 && len(postHashtags) > 0 {
+			payload.Hashtags = normalizeHashtags(postHashtags)
+		}
 	}
 
 	if err := validatePublishPayload(in.Network, payload); err != nil {
@@ -697,6 +738,25 @@ func validatePublishPayload(network string, payload SocialPublishPayload) error 
 	case SocialNetworkInstagram:
 		if len(payload.MediaURLs) == 0 || strings.TrimSpace(payload.MediaURLs[0]) == "" {
 			return fmt.Errorf("instagram publish requires at least one public media_url: %w", ErrPublishPayloadInvalid)
+		}
+		return nil
+	case SocialNetworkFacebook:
+		if payload.FacebookPostType == "photo" && (len(payload.MediaURLs) == 0 || strings.TrimSpace(payload.MediaURLs[0]) == "") {
+			return fmt.Errorf("facebook photo publish requires at least one public media_url: %w", ErrPublishPayloadInvalid)
+		}
+		if strings.TrimSpace(payload.Text) == "" && strings.TrimSpace(payload.Link) == "" {
+			return ErrPublishPayloadInvalid
+		}
+		return nil
+	case SocialNetworkLinkedIn:
+		if payload.LinkedInPostType == "image" && (len(payload.MediaURLs) == 0 || strings.TrimSpace(payload.MediaURLs[0]) == "") {
+			return fmt.Errorf("linkedin image publish requires at least one public media_url: %w", ErrPublishPayloadInvalid)
+		}
+		if payload.LinkedInPostType == "article" && strings.TrimSpace(payload.Link) == "" {
+			return fmt.Errorf("linkedin article publish requires link: %w", ErrPublishPayloadInvalid)
+		}
+		if strings.TrimSpace(payload.Text) == "" {
+			return ErrPublishPayloadInvalid
 		}
 		return nil
 	case SocialNetworkReddit:
@@ -718,36 +778,124 @@ func validatePublishPayload(network string, payload SocialPublishPayload) error 
 	}
 }
 
+func trimStringSlice(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		v := strings.TrimSpace(value)
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func normalizeHashtags(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		v := strings.TrimSpace(strings.TrimPrefix(value, "#"))
+		if v != "" {
+			out = append(out, "#"+v)
+		}
+	}
+	return out
+}
+
+func normalizeMentions(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		v := strings.TrimSpace(strings.TrimPrefix(value, "@"))
+		if v != "" {
+			out = append(out, "@"+v)
+		}
+	}
+	return out
+}
+
+func normalizeFacebookPostType(value string) string {
+	v := strings.ToLower(strings.TrimSpace(value))
+	if v == "photo" {
+		return "photo"
+	}
+	return "feed"
+}
+
+func normalizeLinkedInPostType(value string, mediaURLs []string, link string) string {
+	v := strings.ToLower(strings.TrimSpace(value))
+	switch v {
+	case "article", "image":
+		return v
+	case "text":
+		return "text"
+	default:
+		if len(trimStringSlice(mediaURLs)) > 0 {
+			return "image"
+		}
+		if strings.TrimSpace(link) != "" {
+			return "article"
+		}
+		return "text"
+	}
+}
+
+func composeNetworkText(payload SocialPublishPayload, maxLen int) string {
+	parts := []string{}
+	base := strings.TrimSpace(payload.Text)
+	if base != "" {
+		parts = append(parts, base)
+	}
+	if len(payload.Mentions) > 0 {
+		parts = append(parts, strings.Join(payload.Mentions, " "))
+	}
+	if len(payload.Hashtags) > 0 {
+		parts = append(parts, strings.Join(payload.Hashtags, " "))
+	}
+	out := strings.TrimSpace(strings.Join(parts, "\n\n"))
+	if maxLen > 0 && len([]rune(out)) > maxLen {
+		runes := []rune(out)
+		if maxLen > 1 {
+			out = string(runes[:maxLen-1]) + "…"
+		} else {
+			out = string(runes[:maxLen])
+		}
+	}
+	return out
+}
+
+func composeInstagramCaption(payload SocialPublishPayload) string {
+	mergedMentions := make([]string, 0, len(payload.Mentions)+len(payload.InstagramTags))
+	seen := map[string]bool{}
+	for _, mention := range append(payload.Mentions, payload.InstagramTags...) {
+		norm := strings.TrimSpace(mention)
+		if norm == "" {
+			continue
+		}
+		if !strings.HasPrefix(norm, "@") {
+			norm = "@" + strings.TrimPrefix(norm, "@")
+		}
+		if seen[norm] {
+			continue
+		}
+		seen[norm] = true
+		mergedMentions = append(mergedMentions, norm)
+	}
+
+	captionPayload := payload
+	captionPayload.Mentions = mergedMentions
+	caption := composeNetworkText(captionPayload, 0)
+	if strings.TrimSpace(payload.MusicTrack) == "" {
+		return caption
+	}
+	if caption == "" {
+		return "🎵 " + strings.TrimSpace(payload.MusicTrack)
+	}
+	return caption + "\n\n🎵 " + strings.TrimSpace(payload.MusicTrack)
+}
+
 func normalizeSubreddit(v string) string {
 	v = strings.TrimSpace(strings.ToLower(v))
 	v = strings.TrimPrefix(v, "r/")
 	v = strings.TrimPrefix(v, "/r/")
 	return v
-}
-
-func extractPostText(content json.RawMessage) string {
-	if len(content) == 0 {
-		return ""
-	}
-	var body map[string]json.RawMessage
-	if err := json.Unmarshal(content, &body); err != nil {
-		return ""
-	}
-	candidates := []string{"post_text", "text", "content"}
-	for _, key := range candidates {
-		raw, ok := body[key]
-		if !ok {
-			continue
-		}
-		var value string
-		if err := json.Unmarshal(raw, &value); err == nil {
-			value = strings.TrimSpace(value)
-			if value != "" {
-				return value
-			}
-		}
-	}
-	return ""
 }
 
 func (s *SocialService) createJob(ctx context.Context, userID string, postID *string, conn *SocialConnection, payload SocialPublishPayload, scheduledFor time.Time) (*SocialPostJob, error) {
@@ -1050,27 +1198,54 @@ func NewLinkedInPublisher(client HTTPDoer) *LinkedInPublisher {
 }
 
 func (p *LinkedInPublisher) Publish(ctx context.Context, conn SocialConnection, payload SocialPublishPayload) (*PublishResult, error) {
+	finalText := composeNetworkText(payload, 0)
+	shareMediaCategory := "NONE"
+	media := make([]interface{}, 0)
+
+	postType := payload.LinkedInPostType
+	if postType == "" {
+		postType = normalizeLinkedInPostType("", payload.MediaURLs, payload.Link)
+	}
+
+	if postType == "article" && payload.Link != "" {
+		shareMediaCategory = "ARTICLE"
+		media = append(media, map[string]interface{}{
+			"status":      "READY",
+			"originalUrl": payload.Link,
+		})
+	}
+
+	if postType == "image" && len(payload.MediaURLs) > 0 {
+		shareMediaCategory = "IMAGE"
+		for _, mediaURL := range payload.MediaURLs {
+			assetURN, err := p.uploadImageAsset(ctx, conn.AccessToken, conn.AccountID, mediaURL)
+			if err != nil {
+				return nil, err
+			}
+			media = append(media, map[string]interface{}{
+				"status": "READY",
+				"media":  assetURN,
+			})
+		}
+	}
+
+	shareContent := map[string]interface{}{
+		"shareCommentary":    map[string]string{"text": finalText},
+		"shareMediaCategory": shareMediaCategory,
+	}
+	if len(media) > 0 {
+		shareContent["media"] = media
+	}
+
 	body := map[string]interface{}{
 		"author":         conn.AccountID,
 		"lifecycleState": "PUBLISHED",
 		"specificContent": map[string]interface{}{
-			"com.linkedin.ugc.ShareContent": map[string]interface{}{
-				"shareCommentary":    map[string]string{"text": payload.Text},
-				"shareMediaCategory": "NONE",
-			},
+			"com.linkedin.ugc.ShareContent": shareContent,
 		},
 		"visibility": map[string]string{
 			"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
 		},
-	}
-	if payload.Link != "" {
-		body["specificContent"] = map[string]interface{}{
-			"com.linkedin.ugc.ShareContent": map[string]interface{}{
-				"shareCommentary":    map[string]string{"text": payload.Text},
-				"shareMediaCategory": "ARTICLE",
-				"media":              []interface{}{map[string]interface{}{"status": "READY", "originalUrl": payload.Link}},
-			},
-		}
 	}
 
 	raw, status, headers, err := doJSONRequest(ctx, p.client, http.MethodPost, "https://api.linkedin.com/v2/ugcPosts", conn.AccessToken, body, map[string]string{
@@ -1086,6 +1261,95 @@ func (p *LinkedInPublisher) Publish(ctx context.Context, conn SocialConnection, 
 	return &PublishResult{ProviderPostID: providerID, RawResponse: raw}, nil
 }
 
+func (p *LinkedInPublisher) uploadImageAsset(ctx context.Context, accessToken, ownerURN, mediaURL string) (string, error) {
+	registerBody := map[string]interface{}{
+		"registerUploadRequest": map[string]interface{}{
+			"recipes": []string{"urn:li:digitalmediaRecipe:feedshare-image"},
+			"owner":   ownerURN,
+			"serviceRelationships": []map[string]string{
+				{
+					"relationshipType": "OWNER",
+					"identifier":       "urn:li:userGeneratedContent",
+				},
+			},
+		},
+	}
+
+	regRaw, regStatus, _, err := doJSONRequest(
+		ctx,
+		p.client,
+		http.MethodPost,
+		"https://api.linkedin.com/v2/assets?action=registerUpload",
+		accessToken,
+		registerBody,
+		map[string]string{"X-Restli-Protocol-Version": "2.0.0"},
+	)
+	if err != nil {
+		return "", err
+	}
+	if regStatus < 200 || regStatus >= 300 {
+		return "", fmt.Errorf("linkedin image register upload failed: status=%d body=%s", regStatus, string(regRaw))
+	}
+
+	var regResp struct {
+		Value struct {
+			Asset           string `json:"asset"`
+			UploadMechanism struct {
+				MediaUploadHTTP struct {
+					UploadURL string `json:"uploadUrl"`
+				} `json:"com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"`
+			} `json:"uploadMechanism"`
+		} `json:"value"`
+	}
+	if err := json.Unmarshal(regRaw, &regResp); err != nil {
+		return "", err
+	}
+	assetURN := strings.TrimSpace(regResp.Value.Asset)
+	uploadURL := strings.TrimSpace(regResp.Value.UploadMechanism.MediaUploadHTTP.UploadURL)
+	if assetURN == "" || uploadURL == "" {
+		return "", errors.New("linkedin image register upload returned empty asset or upload URL")
+	}
+
+	mediaReq, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
+	if err != nil {
+		return "", err
+	}
+	mediaResp, err := p.client.Do(mediaReq)
+	if err != nil {
+		return "", err
+	}
+	defer mediaResp.Body.Close()
+	if mediaResp.StatusCode < 200 || mediaResp.StatusCode >= 300 {
+		body, _ := io.ReadAll(mediaResp.Body)
+		return "", fmt.Errorf("linkedin image fetch failed: status=%d body=%s", mediaResp.StatusCode, string(body))
+	}
+	data, err := io.ReadAll(mediaResp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	uploadReq, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	contentType := mediaResp.Header.Get("Content-Type")
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/octet-stream"
+	}
+	uploadReq.Header.Set("Content-Type", contentType)
+	uploadResp, err := p.client.Do(uploadReq)
+	if err != nil {
+		return "", err
+	}
+	defer uploadResp.Body.Close()
+	if uploadResp.StatusCode < 200 || uploadResp.StatusCode >= 300 {
+		body, _ := io.ReadAll(uploadResp.Body)
+		return "", fmt.Errorf("linkedin image binary upload failed: status=%d body=%s", uploadResp.StatusCode, string(body))
+	}
+
+	return assetURN, nil
+}
+
 // FacebookPublisher publishes to a Facebook Page feed.
 type FacebookPublisher struct {
 	client HTTPDoer
@@ -1096,8 +1360,29 @@ func NewFacebookPublisher(client HTTPDoer) *FacebookPublisher {
 }
 
 func (p *FacebookPublisher) Publish(ctx context.Context, conn SocialConnection, payload SocialPublishPayload) (*PublishResult, error) {
+	finalText := composeNetworkText(payload, 0)
+	if payload.FacebookPostType == "photo" && len(payload.MediaURLs) > 0 {
+		form := map[string]string{
+			"url":     payload.MediaURLs[0],
+			"caption": finalText,
+		}
+		url := fmt.Sprintf("https://graph.facebook.com/v25.0/%s/photos", conn.AccountID)
+		raw, status, _, err := doFormRequest(ctx, p.client, http.MethodPost, url, conn.AccessToken, form)
+		if err != nil {
+			return nil, err
+		}
+		if status < 200 || status >= 300 {
+			return nil, fmt.Errorf("facebook photo publish failed: status=%d body=%s", status, string(raw))
+		}
+		var parsed struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(raw, &parsed)
+		return &PublishResult{ProviderPostID: parsed.ID, RawResponse: raw}, nil
+	}
+
 	form := map[string]string{
-		"message": payload.Text,
+		"message": finalText,
 	}
 	if payload.Link != "" {
 		form["link"] = payload.Link
@@ -1184,7 +1469,7 @@ func (p *InstagramPublisher) createMediaContainer(ctx context.Context, conn Soci
 	}
 
 	body := map[string]string{
-		"caption":    payload.Text,
+		"caption":    composeInstagramCaption(payload),
 		"media_type": "CAROUSEL",
 		"children":   strings.Join(children, ","),
 	}
@@ -1210,7 +1495,20 @@ func (p *InstagramPublisher) createMediaContainer(ctx context.Context, conn Soci
 
 func (p *InstagramPublisher) createSingleInstagramContainer(ctx context.Context, conn SocialConnection, payload SocialPublishPayload, mediaURL string, isCarouselItem bool) (string, error) {
 	body := map[string]interface{}{
-		"caption": payload.Text,
+		"caption": composeInstagramCaption(payload),
+	}
+	hasUserTags := false
+	if len(payload.InstagramTags) > 0 {
+		tags := make([]map[string]interface{}, 0, len(payload.InstagramTags))
+		for _, username := range payload.InstagramTags {
+			tags = append(tags, map[string]interface{}{
+				"username": strings.TrimPrefix(username, "@"),
+				"x":        0.5,
+				"y":        0.5,
+			})
+		}
+		body["user_tags"] = tags
+		hasUserTags = true
 	}
 	if isCarouselItem {
 		body["is_carousel_item"] = true
@@ -1225,6 +1523,27 @@ func (p *InstagramPublisher) createSingleInstagramContainer(ctx context.Context,
 	raw, status, _, err := doJSONRequest(ctx, p.client, http.MethodPost, url, conn.AccessToken, body, nil)
 	if err != nil {
 		return "", err
+	}
+	if status >= 200 && status < 300 {
+		var parsed struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			return "", err
+		}
+		if parsed.ID == "" {
+			return "", fmt.Errorf("instagram media container missing id")
+		}
+		return parsed.ID, nil
+	}
+
+	// If tagging specific users fails, retry once without user_tags so publish can continue.
+	if hasUserTags && isInstagramUserTagInaccessible(raw) {
+		delete(body, "user_tags")
+		raw, status, _, err = doJSONRequest(ctx, p.client, http.MethodPost, url, conn.AccessToken, body, nil)
+		if err != nil {
+			return "", err
+		}
 	}
 	if status < 200 || status >= 300 {
 		if isInstagramInvalidMediaURL(raw) {
@@ -1286,6 +1605,15 @@ func isInstagramInvalidMediaURL(raw []byte) bool {
 	return strings.Contains(msg, "only photo or video can be accepted") ||
 		strings.Contains(msg, "url da midia") ||
 		strings.Contains(msg, "media url")
+}
+
+func isInstagramUserTagInaccessible(raw []byte) bool {
+	code, subcode, message, ok := parseMetaError(raw)
+	if ok && code == 100 && subcode == 2207018 {
+		return true
+	}
+	msg := strings.ToLower(message)
+	return strings.Contains(msg, "user") && strings.Contains(msg, "cannot be")
 }
 
 func parseMetaError(raw []byte) (code int, subcode int, message string, ok bool) {
@@ -1422,7 +1750,8 @@ func NewXPublisher(client HTTPDoer) *XPublisher {
 }
 
 func (p *XPublisher) Publish(ctx context.Context, conn SocialConnection, payload SocialPublishPayload) (*PublishResult, error) {
-	body := map[string]interface{}{"text": payload.Text}
+	finalText := composeNetworkText(payload, 280)
+	body := map[string]interface{}{"text": finalText}
 	raw, status, _, err := doJSONRequest(ctx, p.client, http.MethodPost, "https://api.x.com/2/tweets", conn.AccessToken, body, nil)
 	if err != nil {
 		return nil, err

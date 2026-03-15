@@ -1,7 +1,7 @@
 "use client";
 
 import { XLogo } from "@/components/icons/XLogo";
-import { getPosts, type Post } from "@/lib/api/posts";
+import { getPostById, getPosts, type Post } from "@/lib/api/posts";
 import {
   getSocialConnections,
   getSocialJobs,
@@ -104,6 +104,18 @@ function statusLabel(status: SocialJob["status"]) {
   }
 }
 
+function parseListField(value: string, prefix?: "#" | "@") {
+  return value
+    .split(/[\n,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      if (!prefix) return item;
+      const clean = item.replace(/^[@#]/, "");
+      return `${prefix}${clean}`;
+    });
+}
+
 export default function SocialPage() {
   const [connections, setConnections] = useState<SocialConnection[]>([]);
   const [jobs, setJobs] = useState<SocialJob[]>([]);
@@ -135,7 +147,8 @@ export default function SocialPage() {
     postId: "",
     title: "",
     text: "",
-    link: "",
+    hashtags: "",
+    instagramTags: "",
     publishAt: "",
   });
   const [mediaFileItems, setMediaFileItems] = useState<
@@ -170,6 +183,13 @@ export default function SocialPage() {
   const failedJobsCount = useMemo(
     () => jobs.filter((job) => job.status === "failed").length,
     [jobs],
+  );
+  const selectedGeneratedPost = useMemo(
+    () =>
+      publishForm.source === "generated"
+        ? posts.find((post) => post.id === publishForm.postId)
+        : undefined,
+    [publishForm.source, publishForm.postId, posts],
   );
 
   useEffect(() => {
@@ -283,7 +303,36 @@ export default function SocialPage() {
     const uploadedMediaUrls = mediaFileItems
       .filter((item) => item.url)
       .map((item) => item.url!);
-    if (publishForm.network === "instagram" && uploadedMediaUrls.length === 0) {
+
+    let dbGeneratedPost: Post | undefined;
+    if (publishForm.source === "generated" && publishForm.postId) {
+      try {
+        dbGeneratedPost = await getPostById(publishForm.postId);
+      } catch {
+        dbGeneratedPost = selectedGeneratedPost;
+      }
+    }
+
+    const effectiveMediaUrls =
+      uploadedMediaUrls.length > 0
+        ? uploadedMediaUrls
+        : dbGeneratedPost?.image_url
+          ? [dbGeneratedPost.image_url]
+          : selectedGeneratedPost?.image_url
+            ? [selectedGeneratedPost.image_url]
+            : [];
+
+    const inputHashtags = parseListField(publishForm.hashtags, "#");
+    const hashtags =
+      inputHashtags.length > 0
+        ? inputHashtags
+        : (dbGeneratedPost?.hashtags ?? []);
+    const instagramTags = parseListField(publishForm.instagramTags, "@");
+    if (
+      publishForm.network === "instagram" &&
+      publishForm.source === "manual" &&
+      effectiveMediaUrls.length === 0
+    ) {
       setFeedback({
         tone: "error",
         text: "No Instagram, adicione ao menos uma imagem.",
@@ -308,11 +357,12 @@ export default function SocialPage() {
             : undefined,
         title: publishForm.title || undefined,
         text:
-          publishForm.source === "manual"
-            ? publishForm.text || undefined
-            : undefined,
-        link: publishForm.link || undefined,
-        media_urls: uploadedMediaUrls,
+          (publishForm.text || dbGeneratedPost?.post_text || "").trim() ||
+          undefined,
+        media_urls: effectiveMediaUrls,
+        hashtags,
+        instagram_tags:
+          publishForm.network === "instagram" ? instagramTags : undefined,
         publish_at:
           deliveryMode === "schedule" && publishForm.publishAt
             ? new Date(publishForm.publishAt).toISOString()
@@ -329,7 +379,8 @@ export default function SocialPage() {
         ...current,
         title: "",
         text: "",
-        link: "",
+        hashtags: "",
+        instagramTags: "",
         publishAt: "",
         postId: "",
       }));
@@ -352,27 +403,6 @@ export default function SocialPage() {
           <p className="page-subtitle">
             Conectar contas, publicar agora e agendar conteúdo no horário certo.
           </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {NETWORKS.map((item) => (
-            <button
-              key={item.id}
-              onClick={() =>
-                setPublishForm((current) => ({
-                  ...current,
-                  network: item.id,
-                  connectionId: "",
-                }))
-              }
-              className={`filter-chip transition-all border ${
-                publishForm.network === item.id
-                  ? "filter-chip-active border-foreground"
-                  : "filter-chip-inactive border-border"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -482,6 +512,7 @@ export default function SocialPage() {
                       setPublishForm((current) => ({
                         ...current,
                         source: item.id,
+                        postId: item.id === "manual" ? "" : current.postId,
                       }))
                     }
                     className={`pill-item ${
@@ -498,12 +529,48 @@ export default function SocialPage() {
               {publishForm.source === "generated" ? (
                 <select
                   value={publishForm.postId}
-                  onChange={(event) =>
+                  onChange={async (event) => {
+                    const selectedId = event.target.value;
+                    let selectedPost = posts.find(
+                      (post) => post.id === selectedId,
+                    );
+                    if (selectedId) {
+                      try {
+                        selectedPost = await getPostById(selectedId);
+                      } catch {
+                        // fallback to local list cache
+                      }
+                    }
                     setPublishForm((current) => ({
                       ...current,
-                      postId: event.target.value,
-                    }))
-                  }
+                      postId: selectedId,
+                      text: selectedPost?.post_text ?? current.text,
+                      hashtags:
+                        selectedPost?.hashtags &&
+                        selectedPost.hashtags.length > 0
+                          ? selectedPost.hashtags
+                              .map((tag) => tag.trim())
+                              .filter(Boolean)
+                              .map((tag) =>
+                                tag.startsWith("#") ? tag : `#${tag}`,
+                              )
+                              .join(" ")
+                          : current.hashtags,
+                    }));
+
+                    if (selectedPost?.image_url) {
+                      setMediaFileItems([
+                        {
+                          id: `generated-${selectedPost.id}`,
+                          name: "Imagem do post gerado",
+                          url: selectedPost.image_url,
+                          uploading: false,
+                        },
+                      ]);
+                    } else {
+                      setMediaFileItems([]);
+                    }
+                  }}
                   className="input-field"
                 >
                   <option value="">Selecione um post gerado</option>
@@ -513,77 +580,116 @@ export default function SocialPage() {
                     </option>
                   ))}
                 </select>
-              ) : (
-                <textarea
-                  value={publishForm.text}
-                  onChange={(event) =>
-                    setPublishForm((current) => ({
-                      ...current,
-                      text: event.target.value,
-                    }))
-                  }
-                  placeholder="Texto do post"
-                  rows={5}
-                  className="textarea-field"
-                />
-              )}
+              ) : null}
 
-              <input
-                value={publishForm.link}
+              <textarea
+                value={publishForm.text}
                 onChange={(event) =>
                   setPublishForm((current) => ({
                     ...current,
-                    link: event.target.value,
+                    text: event.target.value,
                   }))
                 }
-                placeholder="Link opcional"
-                className="input-field"
+                placeholder={
+                  publishForm.source === "generated"
+                    ? "Legenda do post gerado (edite se quiser)"
+                    : "Texto do post"
+                }
+                rows={5}
+                className="textarea-field"
               />
 
-              {(publishForm.network === "instagram" ||
-                publishForm.network === "facebook") && (
+              <div className="space-y-2">
+                <input
+                  value={publishForm.hashtags}
+                  onChange={(event) =>
+                    setPublishForm((current) => ({
+                      ...current,
+                      hashtags: event.target.value,
+                    }))
+                  }
+                  placeholder="Hashtags (ex: #marketing #social)"
+                  className="input-field"
+                />
+              </div>
+
+              {publishForm.network === "instagram" && (
                 <div className="space-y-2">
-                  <div
-                    className="rounded-2xl border-2 border-dashed border-border p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-foreground/40 transition-colors"
-                    onClick={() => mediaInputRef.current?.click()}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const files = Array.from(e.dataTransfer.files).filter(
-                        (f) => f.type.startsWith("image/"),
-                      );
-                      if (files.length > 0) void handleMediaSelect(files);
-                    }}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
-                      <Upload size={18} className="text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground">
-                      Adicionar imagem
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Clique ou arraste um arquivo (jpeg, png, webp)
-                    </p>
-                    <input
-                      ref={mediaInputRef}
-                      type="file"
-                      multiple
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        if (files.length > 0) void handleMediaSelect(files);
-                        e.target.value = "";
-                      }}
-                    />
+                  <input
+                    value={publishForm.instagramTags}
+                    onChange={(event) =>
+                      setPublishForm((current) => ({
+                        ...current,
+                        instagramTags: event.target.value,
+                      }))
+                    }
+                    placeholder="Tags de pessoas no IG (ex: @ana @marca)"
+                    className="input-field"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use hashtags separadas por espaço, vírgula ou quebra de
+                    linha.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <div
+                  className="rounded-2xl border-2 border-dashed border-border p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-foreground/40 transition-colors"
+                  onClick={() => mediaInputRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const files = Array.from(e.dataTransfer.files).filter((f) =>
+                      f.type.startsWith("image/"),
+                    );
+                    if (files.length > 0) void handleMediaSelect(files);
+                  }}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
+                    <Upload size={18} className="text-muted-foreground" />
                   </div>
-                  {mediaFileItems.length > 0 && (
-                    <div className="grid grid-cols-3 gap-2">
+                  <p className="text-sm font-medium text-foreground">
+                    Adicionar imagem
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Clique ou arraste um arquivo (jpeg, png, webp)
+                  </p>
+                  <input
+                    ref={mediaInputRef}
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      if (files.length > 0) void handleMediaSelect(files);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+                {publishForm.source === "generated" &&
+                  selectedGeneratedPost?.image_url &&
+                  mediaFileItems.length === 0 && (
+                    <div className="rounded-xl border border-border bg-background p-2">
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Imagem do post gerado será usada automaticamente.
+                      </p>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={selectedGeneratedPost.image_url}
+                        alt="Imagem do post gerado"
+                        className="w-20 h-20 rounded-lg object-cover border border-border"
+                      />
+                    </div>
+                  )}
+                {mediaFileItems.length > 0 && (
+                  <div className="rounded-xl border border-border bg-background p-2 max-h-28 overflow-y-auto">
+                    <div className="flex flex-wrap gap-2">
                       {mediaFileItems.map((item) => (
                         <div
                           key={item.id}
-                          className="relative rounded-xl overflow-hidden border border-border"
-                          style={{ aspectRatio: "1" }}
+                          className="relative w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-border"
                         >
                           {item.url ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -593,20 +699,20 @@ export default function SocialPage() {
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-secondary">
+                            <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-secondary px-1">
                               {item.uploading ? (
                                 <Loader2
-                                  size={16}
+                                  size={14}
                                   className="animate-spin text-muted-foreground"
                                 />
                               ) : (
                                 <ImageIcon
-                                  size={16}
+                                  size={14}
                                   className="text-muted-foreground"
                                 />
                               )}
                               {item.error && (
-                                <p className="text-[10px] text-red-500 text-center px-1">
+                                <p className="text-[9px] text-red-500 text-center leading-tight">
                                   {item.error}
                                 </p>
                               )}
@@ -628,9 +734,9 @@ export default function SocialPage() {
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
 
               <div className="space-y-3">
                 <input

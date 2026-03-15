@@ -185,6 +185,7 @@ func main() {
 
 			postHandler := handler.NewPostHandler(postSvc)
 			r.Get("/api/posts", postHandler.List)
+			r.Get("/api/posts/{id}", postHandler.Get)
 			r.Get("/api/posts/{id}/insights", postHandler.GetPostInsights)
 			r.Patch("/api/posts/{id}/status", postHandler.UpdateStatus)
 

@@ -30,6 +30,12 @@ export interface SocialJob {
     text: string;
     link?: string;
     media_urls?: string[];
+    hashtags?: string[];
+    mentions?: string[];
+    instagram_tags?: string[];
+    music_track?: string;
+    facebook_post_type?: "feed" | "photo";
+    linkedin_post_type?: "text" | "article" | "image";
     post_id?: string;
   };
   created_at: string;
@@ -44,6 +50,12 @@ export interface PublishPayload {
   text?: string;
   link?: string;
   media_urls?: string[];
+  hashtags?: string[];
+  mentions?: string[];
+  instagram_tags?: string[];
+  music_track?: string;
+  facebook_post_type?: "feed" | "photo";
+  linkedin_post_type?: "text" | "article" | "image";
   publish_at?: string;
 }
 

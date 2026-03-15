@@ -80,6 +80,35 @@ func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(posts)
 }
 
+// Get handles GET /api/posts/{id} — returns a single post for the authenticated user.
+func (h *PostHandler) Get(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		slog.Warn("post get: unauthorized")
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing post id"})
+		return
+	}
+
+	post, err := h.svc.GetByID(r.Context(), id, userID)
+	if err != nil {
+		if errors.Is(err, service.ErrPostNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "post not found"})
+			return
+		}
+		slog.Error("post get: service error", "id", id, "userID", userID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, post)
+}
+
 // UpdateStatus handles PATCH /api/posts/{id}/status.
 func (h *PostHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	userID, ok := getUserID(r)
