@@ -16,7 +16,7 @@ export function GenerateButton({
   triggerRef,
   dark,
 }: GenerateButtonProps) {
-  const { status, messages, start, reset } = useSSEGenerate(onGenerated);
+  const { status, progressMessage, error, start, reset } = useSSEGenerate(onGenerated);
 
   useEffect(() => {
     if (triggerRef) {
@@ -25,7 +25,6 @@ export function GenerateButton({
   }, [start, triggerRef]);
 
   const isActive = status === "connecting" || status === "streaming";
-  const latestMessage = messages[messages.length - 1] ?? "";
 
   if (status === "error") {
     return (
@@ -42,7 +41,7 @@ export function GenerateButton({
         }}
       >
         <RotateCcw size={14} strokeWidth={2} />
-        Tentar novamente
+        {error ? "Tentar novamente" : "Tentar novamente"}
       </button>
     );
   }
@@ -71,8 +70,8 @@ export function GenerateButton({
               borderTopColor: dark ? "#0a0a0a" : "#f8f5ef",
             }}
           />
-          <span className="truncate max-w-[120px]">
-            {latestMessage || "Gerando..."}
+          <span className="truncate max-w-[130px]">
+            {progressMessage || "Gerando..."}
           </span>
         </>
       ) : (

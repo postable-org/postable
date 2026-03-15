@@ -7,6 +7,10 @@ export interface PostContent {
   suggested_format: 'carousel' | 'feed_post' | 'story';
   strategic_justification: string;
   tokens_used: number;
+  // AI-generated image
+  image_url?: string;
+  image_prompt?: string;
+  competitor_gap_analysis?: Record<string, unknown>;
 }
 
 export interface Post {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,6 +29,7 @@ const fieldError = "border-destructive ring-2 ring-destructive/10";
 export default function SignupForm() {
   const [success, setSuccess] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const router = useRouter();
 
   const {
     register,
@@ -37,10 +39,14 @@ export default function SignupForm() {
 
   const onSubmit = async (data: FormData) => {
     setServerError(null);
-    const { error } = await signUp(data.email, data.password);
+    const { data: authData, error } = await signUp(data.email, data.password);
     if (error) {
       setServerError(error.message);
+    } else if (authData?.session) {
+      // Email confirmation is disabled — Supabase returned a session immediately
+      router.push('/dashboard');
     } else {
+      // Email confirmation is enabled — show "check your email" message
       setSuccess(true);
     }
   };
