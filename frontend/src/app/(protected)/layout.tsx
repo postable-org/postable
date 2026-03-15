@@ -70,6 +70,8 @@ export default function ProtectedLayout({
         {[
           { href: "/dashboard", label: "Início", icon: "⊞" },
           { href: "/posts", label: "Posts", icon: "✦" },
+          { href: "/pipeline", label: "Pipeline", icon: "⧈" },
+          { href: "/analytics", label: "Métricas", icon: "◈" },
           { href: "/social", label: "Social", icon: "◉" },
           { href: "/campaigns", label: "Camps.", icon: "◎" },
           { href: "/context", label: "IA", icon: "✿" },

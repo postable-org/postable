@@ -11,6 +11,8 @@ import {
   Settings,
   Share2,
   Twitter,
+  Kanban,
+  BarChart2,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -21,7 +23,9 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Visão Geral", Icon: LayoutDashboard },
   { href: "/posts", label: "Posts", Icon: FileText },
   { href: "/social", label: "Social", Icon: Share2 },
+  { href: "/pipeline", label: "Pipeline", Icon: Kanban },
   { href: "/campaigns", label: "Campanhas", Icon: Megaphone },
+  { href: "/analytics", label: "Métricas", Icon: BarChart2 },
   { href: "/context", label: "Contexto", Icon: Brain },
 ];
 
@@ -228,10 +232,17 @@ export function Sidebar({
           href="/settings"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm w-full"
           style={{
-            color: "rgba(248,245,239,0.4)",
+            backgroundColor: pathname === "/settings" ? "rgba(248,245,239,0.09)" : "transparent",
+            color: pathname === "/settings" ? "#f8f5ef" : "rgba(248,245,239,0.4)",
             fontFamily: "var(--font-body)",
+            fontWeight: pathname === "/settings" ? 500 : 400,
           }}
         >
+          <Settings
+            size={15}
+            strokeWidth={pathname === "/settings" ? 2 : 1.8}
+            style={{ color: pathname === "/settings" ? "#f8f5ef" : "rgba(248,245,239,0.3)" }}
+          />
           <Settings
             size={15}
             strokeWidth={1.8}
