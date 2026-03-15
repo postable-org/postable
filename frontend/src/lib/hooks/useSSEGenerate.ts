@@ -41,6 +41,7 @@ export interface GenerateRequest {
   post_history: string[];
   campaign_brief: CampaignBrief;
   platform: string;
+  placement?: string;
 }
 
 export interface UseSSEGenerateResult {

@@ -34,6 +34,14 @@ export interface Post {
   tokens_used: number;
   image_url?: string;
   image_prompt?: string;
+  placement?: string;
+  creative_spec?: {
+    aspect_ratio: string;
+    style_notes: string;
+    alt_text: string;
+  };
+  brand_facts_used?: string[];
+  sources?: string[];
   created_at: string;
   updated_at: string;
 }

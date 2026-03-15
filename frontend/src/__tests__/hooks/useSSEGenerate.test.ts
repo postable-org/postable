@@ -10,6 +10,7 @@ const minimalPayload: GenerateRequest = {
   competitor_handles: [],
   post_history: [],
   campaign_brief: { goal: '', target_audience: '', cta_channel: 'dm', theme_hint: null },
+  platform: 'instagram',
 };
 
 function makeControllableSSEResponse() {

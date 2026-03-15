@@ -71,6 +71,44 @@ func TestGenerateSSE_EmitsCompetitorStageEvent(t *testing.T) {
 	}
 }
 
+const testGenerateBodyWithPlacement = `{"business_profile":{"niche":"food","city":"Sao Paulo","state":"SP","tone":"friendly","brand_identity":"test"},"competitor_handles":[],"post_history":[],"campaign_brief":{"goal":"","target_audience":"","cta_channel":"dm","theme_hint":null},"platform":"instagram","placement":"story"}`
+
+func TestGenerateSSE_PlacementForwardedToAgent(t *testing.T) {
+	var receivedBody map[string]interface{}
+	python := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"post_text":"hello","cta":"dm","hashtags":["#a"],"suggested_format":"story","strategic_justification":"because","tokens_used":42,"placement":"story"}`))
+	}))
+	defer python.Close()
+
+	t.Setenv("PYTHON_AGENT_URL", python.URL)
+	genSvc := service.NewGenerateService()
+	brandSvc := &MockBrandService{brand: &service.Brand{ID: "brand-1", UserID: "user-abc", Niche: "food", City: "Sao Paulo", State: "SP", ToneOfVoice: "friendly", CTAChannel: "dm"}}
+	postSvc := &mockPostService{}
+	router := buildGenerateRouter(genSvc, brandSvc, postSvc)
+	token := makeTestJWT(t, "user-abc")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/generate", strings.NewReader(testGenerateBodyWithPlacement))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (body: %s)", rr.Code, rr.Body.String())
+	}
+	if receivedBody == nil {
+		t.Fatal("agent never received a request body")
+	}
+	if got := receivedBody["placement"]; got != "story" {
+		t.Errorf("expected placement=story forwarded to agent, got %v", got)
+	}
+	if got := receivedBody["platform"]; got != "instagram" {
+		t.Errorf("expected platform=instagram forwarded to agent, got %v", got)
+	}
+}
+
 func TestGenerateCompetitorGapAnalysis_PersistsToTrendContext(t *testing.T) {
 	python := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

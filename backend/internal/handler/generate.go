@@ -57,6 +57,8 @@ type generatePayload struct {
 	CompetitorHandles []string                `json:"competitor_handles"`
 	PostHistory       []string                `json:"post_history"`
 	CampaignBrief     generateCampaignBrief   `json:"campaign_brief"`
+	Platform          string                  `json:"platform"`
+	Placement         string                  `json:"placement,omitempty"`
 }
 
 var allowedPlatforms = map[string]bool{
@@ -91,6 +93,7 @@ type frontendGenerateRequest struct {
 	PostHistory       []string                `json:"post_history"`
 	CampaignBrief     frontendCampaignBrief   `json:"campaign_brief"`
 	Platform          string                  `json:"platform"`
+	Placement         string                  `json:"placement,omitempty"`
 }
 
 // GenerateHandler handles POST /api/generate SSE requests.
@@ -190,6 +193,8 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 			CTAChannel:     req.CampaignBrief.CTAChannel,
 			ThemeHint:      themeHint,
 		},
+		Platform:  platform,
+		Placement: req.Placement,
 	}
 
 	brandJSON, err := json.Marshal(payload)

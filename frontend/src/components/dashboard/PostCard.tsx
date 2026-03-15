@@ -173,6 +173,14 @@ export function PostCard({ post, onStatusChange, onRegenerate }: PostCardProps) 
             </p>
           )}
 
+          {/* Placement badge */}
+          {post.placement && (
+            <span className="text-xs font-medium text-muted-foreground border rounded px-2 py-0.5 inline-block">
+              {post.placement.charAt(0).toUpperCase() + post.placement.slice(1)}
+              {post.creative_spec?.aspect_ratio ? ` · ${post.creative_spec.aspect_ratio}` : ''}
+            </span>
+          )}
+
           {/* Actions */}
           <div className="flex flex-wrap gap-2 pt-1">
             <Button

@@ -18,14 +18,18 @@ var ErrInvalidStatus = errors.New("invalid status: must be pending, approved, or
 
 // PostContent holds the structured fields of an AI-generated post.
 type PostContent struct {
-	PostText               string   `json:"post_text"`
-	CTA                    string   `json:"cta"`
-	Hashtags               []string `json:"hashtags"`
-	SuggestedFormat        string   `json:"suggested_format"`
-	StrategicJustification string   `json:"strategic_justification"`
-	TokensUsed             int      `json:"tokens_used"`
-	ImageURL               string   `json:"image_url,omitempty"`
-	ImagePrompt            string   `json:"image_prompt,omitempty"`
+	PostText               string          `json:"post_text"`
+	CTA                    string          `json:"cta"`
+	Hashtags               []string        `json:"hashtags"`
+	SuggestedFormat        string          `json:"suggested_format"`
+	StrategicJustification string          `json:"strategic_justification"`
+	TokensUsed             int             `json:"tokens_used"`
+	ImageURL               string          `json:"image_url,omitempty"`
+	ImagePrompt            string          `json:"image_prompt,omitempty"`
+	Placement              string          `json:"placement,omitempty"`
+	CreativeSpec           json.RawMessage `json:"creative_spec,omitempty"`
+	BrandFactsUsed         []string        `json:"brand_facts_used,omitempty"`
+	Sources                []string        `json:"sources,omitempty"`
 }
 
 // Post represents the post model at the service layer.
@@ -44,6 +48,10 @@ type Post struct {
 	ImageURL               string          `json:"image_url,omitempty"`
 	ImagePrompt            string          `json:"image_prompt,omitempty"`
 	TrendContext           json.RawMessage `json:"trend_context,omitempty"`
+	Placement              string          `json:"placement,omitempty"`
+	CreativeSpec           json.RawMessage `json:"creative_spec,omitempty"`
+	BrandFactsUsed         []string        `json:"brand_facts_used,omitempty"`
+	Sources                []string        `json:"sources,omitempty"`
 	CreatedAt              time.Time       `json:"created_at"`
 	UpdatedAt              time.Time       `json:"updated_at"`
 }
@@ -69,7 +77,9 @@ const postColumns = `id, user_id, brand_id, status, platform,
 	COALESCE(post_text, ''), COALESCE(cta, ''), COALESCE(hashtags, ARRAY[]::TEXT[]),
 	COALESCE(suggested_format, ''), COALESCE(strategic_justification, ''),
 	COALESCE(tokens_used, 0), COALESCE(image_url, ''), COALESCE(image_prompt, ''),
-	trend_context, created_at, updated_at`
+	trend_context, COALESCE(placement, ''), creative_spec,
+	COALESCE(brand_facts_used, ARRAY[]::TEXT[]), COALESCE(sources, ARRAY[]::TEXT[]),
+	created_at, updated_at`
 
 func scanPost(row interface {
 	Scan(dest ...any) error
@@ -78,6 +88,7 @@ func scanPost(row interface {
 		&p.ID, &p.UserID, &p.BrandID, &p.Status, &p.Platform,
 		&p.PostText, &p.CTA, &p.Hashtags, &p.SuggestedFormat, &p.StrategicJustification,
 		&p.TokensUsed, &p.ImageURL, &p.ImagePrompt, &p.TrendContext,
+		&p.Placement, &p.CreativeSpec, &p.BrandFactsUsed, &p.Sources,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 }
@@ -104,6 +115,10 @@ func (s *PostService) Create(ctx context.Context, userID, brandID string, conten
 			ImageURL:               content.ImageURL,
 			ImagePrompt:            content.ImagePrompt,
 			TrendContext:           trendContext,
+			Placement:              content.Placement,
+			CreativeSpec:           content.CreativeSpec,
+			BrandFactsUsed:         content.BrandFactsUsed,
+			Sources:                content.Sources,
 			CreatedAt:              time.Now(),
 			UpdatedAt:              time.Now(),
 		}, nil
@@ -113,18 +128,32 @@ func (s *PostService) Create(ctx context.Context, userID, brandID string, conten
 	if hashtags == nil {
 		hashtags = []string{}
 	}
+	brandFactsUsed := content.BrandFactsUsed
+	if brandFactsUsed == nil {
+		brandFactsUsed = []string{}
+	}
+	sources := content.Sources
+	if sources == nil {
+		sources = []string{}
+	}
+	var creativeSpec interface{}
+	if len(content.CreativeSpec) > 0 && string(content.CreativeSpec) != "null" {
+		creativeSpec = content.CreativeSpec
+	}
 
 	post := &Post{}
 	row := s.db.QueryRow(ctx,
 		`INSERT INTO generated_posts
 		 (user_id, brand_id, status, platform,
 		  post_text, cta, hashtags, suggested_format, strategic_justification,
-		  tokens_used, image_url, image_prompt, trend_context)
-		 VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		  tokens_used, image_url, image_prompt, trend_context,
+		  placement, creative_spec, brand_facts_used, sources)
+		 VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		 RETURNING `+postColumns,
 		userID, brandID, platform,
 		content.PostText, content.CTA, hashtags, content.SuggestedFormat, content.StrategicJustification,
 		content.TokensUsed, nullableStr(content.ImageURL), nullableStr(content.ImagePrompt), trendContext,
+		nullableStr(content.Placement), creativeSpec, brandFactsUsed, sources,
 	)
 	if err := scanPost(row, post); err != nil {
 		return nil, err

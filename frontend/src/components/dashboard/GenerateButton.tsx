@@ -8,7 +8,7 @@ import { getBrand } from "@/lib/api/brands";
 import { getCompetitors } from "@/lib/api/competitors";
 import { getPosts } from "@/lib/api/posts";
 import { RotateCcw, Sparkles } from "lucide-react";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 
 interface GenerateButtonProps {
   onGenerated: (content: PostContent) => void;
@@ -22,12 +22,27 @@ interface GenerateButtonProps {
   dark?: boolean;
 }
 
+const PLATFORM_PLACEMENTS: Record<string, string[]> = {
+  instagram: ['feed', 'story', 'carousel'],
+  facebook: ['post', 'story'],
+  linkedin: ['post'],
+  x: ['post', 'thread'],
+}
+
+const DEFAULT_PLACEMENT: Record<string, string> = {
+  instagram: 'feed',
+  facebook: 'post',
+  linkedin: 'post',
+  x: 'post',
+}
+
 const EMPTY_PAYLOAD: GenerateRequest = {
   business_profile: { niche: "", city: "", state: "", tone: "", brand_identity: "" },
   competitor_handles: [],
   post_history: [],
   campaign_brief: { goal: "", target_audience: "", cta_channel: "", theme_hint: null },
   platform: "instagram",
+  placement: "feed",
 };
 
 export function GenerateButton({
@@ -38,6 +53,12 @@ export function GenerateButton({
   dark,
 }: GenerateButtonProps) {
   const { platform } = usePlatform();
+  const [placement, setPlacement] = useState(DEFAULT_PLACEMENT[platform] ?? 'feed')
+
+  useEffect(() => {
+    setPlacement(DEFAULT_PLACEMENT[platform] ?? 'feed')
+  }, [platform])
+
   const { status, stageState, progressMessage, error, start, reset } = useSSEGenerate(onGenerated);
 
   const handleStart = async () => {
@@ -67,6 +88,7 @@ export function GenerateButton({
           theme_hint: null,
         },
         platform,
+        placement,
       };
       start(payload);
     } catch {
@@ -78,7 +100,7 @@ export function GenerateButton({
     if (triggerRef) {
       triggerRef.current = handleStart;
     }
-  }, [start, triggerRef, platform]);
+  }, [start, triggerRef, platform, placement]);
 
   // Expose reset
   useEffect(() => {
@@ -115,39 +137,59 @@ export function GenerateButton({
   }
 
   return (
-    <button
-      onClick={handleStart}
-      disabled={isActive}
-      className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-60 whitespace-nowrap"
-      style={{
-        backgroundColor: dark ? "#f8f5ef" : "#0a0a0a",
-        color: dark ? "#0a0a0a" : "#f8f5ef",
-        fontFamily: "var(--font-body)",
-        minWidth: "160px",
-        justifyContent: "center",
-      }}
-    >
-      {isActive ? (
-        <>
-          <div
-            className="w-4 h-4 border-2 rounded-full animate-spin shrink-0"
-            style={{
-              borderColor: dark
-                ? "rgba(10,10,10,0.2)"
-                : "rgba(248,245,239,0.25)",
-              borderTopColor: dark ? "#0a0a0a" : "#f8f5ef",
-            }}
-          />
-          <span className="truncate max-w-[130px]">
-            {progressMessage || "Gerando..."}
-          </span>
-        </>
-      ) : (
-        <>
-          <Sparkles size={14} strokeWidth={2} />
-          Gerar novo post
-        </>
-      )}
-    </button>
+    <div className="flex items-center gap-2">
+      <select
+        value={placement}
+        onChange={(e) => setPlacement(e.target.value)}
+        disabled={isActive}
+        className="text-sm border rounded px-2 py-1"
+        style={{
+          fontFamily: "var(--font-body)",
+          color: dark ? "#f8f5ef" : "#0a0a0a",
+          backgroundColor: dark ? "rgba(248,245,239,0.1)" : "#f0ede7",
+          border: dark ? "1px solid rgba(248,245,239,0.15)" : "1.5px solid #e4e0d8",
+        }}
+      >
+        {(PLATFORM_PLACEMENTS[platform] ?? ['post']).map((p) => (
+          <option key={p} value={p}>
+            {p.charAt(0).toUpperCase() + p.slice(1)}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={handleStart}
+        disabled={isActive}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-60 whitespace-nowrap"
+        style={{
+          backgroundColor: dark ? "#f8f5ef" : "#0a0a0a",
+          color: dark ? "#0a0a0a" : "#f8f5ef",
+          fontFamily: "var(--font-body)",
+          minWidth: "160px",
+          justifyContent: "center",
+        }}
+      >
+        {isActive ? (
+          <>
+            <div
+              className="w-4 h-4 border-2 rounded-full animate-spin shrink-0"
+              style={{
+                borderColor: dark
+                  ? "rgba(10,10,10,0.2)"
+                  : "rgba(248,245,239,0.25)",
+                borderTopColor: dark ? "#0a0a0a" : "#f8f5ef",
+              }}
+            />
+            <span className="truncate max-w-[130px]">
+              {progressMessage || "Gerando..."}
+            </span>
+          </>
+        ) : (
+          <>
+            <Sparkles size={14} strokeWidth={2} />
+            Gerar novo post
+          </>
+        )}
+      </button>
+    </div>
   );
 }
