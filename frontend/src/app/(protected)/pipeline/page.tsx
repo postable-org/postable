@@ -29,7 +29,6 @@ const COLUMN_DEFS = [
   {
     id: "draft" as ColumnId,
     label: "Rascunho",
-    description: "Ideias e esboços",
     color: "#8c8880",
     bgLight: "#f0ede7",
     Icon: Sparkles,
@@ -37,7 +36,6 @@ const COLUMN_DEFS = [
   {
     id: "pending" as ColumnId,
     label: "Aguardando",
-    description: "Aguardando aprovação",
     color: "#D97706",
     bgLight: "#FEF3C7",
     Icon: Clock,
@@ -45,7 +43,6 @@ const COLUMN_DEFS = [
   {
     id: "approved" as ColumnId,
     label: "Aprovado",
-    description: "Pronto para publicar",
     color: "#059669",
     bgLight: "#D1FAE5",
     Icon: CheckCircle2,
@@ -53,7 +50,6 @@ const COLUMN_DEFS = [
   {
     id: "published" as ColumnId,
     label: "Publicado",
-    description: "Em produção",
     color: "#7C3AED",
     bgLight: "#EDE9FE",
     Icon: Send,
@@ -61,7 +57,6 @@ const COLUMN_DEFS = [
   {
     id: "rejected" as ColumnId,
     label: "Rejeitado",
-    description: "Necessita revisão",
     color: "#DC2626",
     bgLight: "#FEE2E2",
     Icon: XCircle,
@@ -271,12 +266,6 @@ function BoardColumn({
               {posts.length}
             </span>
           </div>
-          <p
-            className="text-[10px] truncate"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
-            {colDef.description}
-          </p>
         </div>
       </div>
 
@@ -450,7 +439,7 @@ export default function PipelinePage() {
     board.rejected.length;
 
   return (
-    <div className="flex flex-col h-full min-h-screen pb-24 md:pb-0">
+    <div className="flex flex-col flex-1 h-full min-h-screen pb-24 md:pb-0 min-w-0">
       {/* Header */}
       <div
         className="px-6 py-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4 shrink-0"
