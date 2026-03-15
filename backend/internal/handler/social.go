@@ -21,6 +21,7 @@ type SocialServiceInterface interface {
 	SubmitPublish(ctx context.Context, userID string, in service.SocialPublishInput) (*service.SocialPostJob, error)
 	ListJobs(ctx context.Context, userID, status string) ([]service.SocialPostJob, error)
 	ProcessDueJobs(ctx context.Context, now time.Time, limit int) (int, error)
+	FetchAndSaveInsights(ctx context.Context, userID string) (int, error)
 }
 
 type SocialHandler struct {
@@ -179,4 +180,21 @@ func (h *SocialHandler) RunDueJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]int{"processed": processed})
+}
+
+func (h *SocialHandler) RefreshInsights(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	updated, err := h.svc.FetchAndSaveInsights(r.Context(), userID)
+	if err != nil {
+		slog.Error("social refresh insights failed", "userID", userID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]int{"updated": updated})
 }

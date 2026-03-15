@@ -368,6 +368,126 @@ func (s *SocialService) ProcessDueJobs(ctx context.Context, now time.Time, limit
 	return processed, nil
 }
 
+// FetchAndSaveInsights pulls post-level metrics from the platform API for all
+// published jobs that have a provider_post_id. Merges the result into
+// provider_response so the analytics service can pick it up immediately.
+// Returns the number of jobs updated.
+func (s *SocialService) FetchAndSaveInsights(ctx context.Context, userID string) (int, error) {
+	if s.db == nil {
+		return 0, ErrSocialUnavailable
+	}
+
+	type insightJob struct {
+		JobID          string
+		Network        string
+		ProviderPostID string
+		AccessToken    string
+	}
+
+	rows, err := s.db.Query(ctx, `
+		SELECT spj.id, spj.network, spj.provider_post_id, sc.access_token
+		FROM social_post_jobs spj
+		JOIN social_connections sc ON sc.id = spj.connection_id
+		WHERE spj.user_id = $1
+		  AND spj.status = $2
+		  AND spj.provider_post_id IS NOT NULL
+		ORDER BY spj.published_at DESC
+		LIMIT 100
+	`, userID, SocialJobPublished)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	jobs := make([]insightJob, 0)
+	for rows.Next() {
+		var ij insightJob
+		if err := rows.Scan(&ij.JobID, &ij.Network, &ij.ProviderPostID, &ij.AccessToken); err != nil {
+			return 0, err
+		}
+		jobs = append(jobs, ij)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	updated := 0
+	for _, job := range jobs {
+		var metrics map[string]interface{}
+		switch job.Network {
+		case SocialNetworkInstagram, SocialNetworkFacebook:
+			metrics = fetchMetaInsights(ctx, httpClient, job.ProviderPostID, job.AccessToken)
+		default:
+			continue
+		}
+		if len(metrics) == 0 {
+			continue
+		}
+		raw, err := json.Marshal(metrics)
+		if err != nil {
+			continue
+		}
+		if _, err := s.db.Exec(ctx, `
+			UPDATE social_post_jobs
+			SET provider_response = $1, updated_at = now()
+			WHERE id = $2
+		`, raw, job.JobID); err != nil {
+			slog.Warn("social insights: failed to save provider_response", "jobID", job.JobID, "error", err)
+			continue
+		}
+		updated++
+	}
+	return updated, nil
+}
+
+// fetchMetaInsights calls Meta's Graph API to get post-level metrics.
+// It tries the /insights endpoint first; falls back to basic fields.
+func fetchMetaInsights(ctx context.Context, client *http.Client, mediaID, accessToken string) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	// Basic fields available on all Instagram media (business & creator).
+	basicURL := fmt.Sprintf(
+		"https://graph.facebook.com/v25.0/%s?fields=like_count,comments_count,timestamp,media_type&access_token=%s",
+		mediaID, accessToken,
+	)
+	if raw, status, _, err := doJSONRequest(ctx, client, http.MethodGet, basicURL, "", nil, nil); err == nil && status >= 200 && status < 300 {
+		var parsed map[string]interface{}
+		if json.Unmarshal(raw, &parsed) == nil {
+			if v, ok := parsed["like_count"]; ok {
+				result["likes"] = v
+			}
+			if v, ok := parsed["comments_count"]; ok {
+				result["comments"] = v
+			}
+		}
+	}
+
+	// Insights endpoint — requires instagram_manage_insights permission.
+	insightsURL := fmt.Sprintf(
+		"https://graph.facebook.com/v25.0/%s/insights?metric=reach,impressions,saved,profile_activity&access_token=%s",
+		mediaID, accessToken,
+	)
+	if raw, status, _, err := doJSONRequest(ctx, client, http.MethodGet, insightsURL, "", nil, nil); err == nil && status >= 200 && status < 300 {
+		var body struct {
+			Data []struct {
+				Name   string                        `json:"name"`
+				Values []struct{ Value interface{} } `json:"values"`
+				Period string                        `json:"period"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(raw, &body) == nil {
+			for _, metric := range body.Data {
+				if len(metric.Values) > 0 {
+					result[metric.Name] = metric.Values[0].Value
+				}
+			}
+		}
+	}
+
+	return result
+}
+
 func (s *SocialService) requeueStaleProcessingJobs(ctx context.Context, now time.Time, staleAfter time.Duration) error {
 	if staleAfter <= 0 {
 		staleAfter = 2 * time.Minute
