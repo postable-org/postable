@@ -14,12 +14,12 @@ import {
   Megaphone,
   Settings,
   Share2,
-  Twitter,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "./LogoutButton";
+import { XLogo } from "@/components/icons/XLogo";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Visão Geral", Icon: LayoutDashboard },
@@ -53,7 +53,7 @@ const PLATFORMS = [
   {
     id: "x",
     label: "X",
-    Icon: Twitter,
+    Icon: XLogo,
     color: "#FFFFFF",
   },
 ];

@@ -11,15 +11,15 @@ import {
   LayoutGrid,
   Linkedin,
   List,
-  Twitter,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { XLogo } from "@/components/icons/XLogo";
 
 const PLATFORMS = [
   { id: "instagram", label: "Instagram", Icon: Instagram, color: "#E1306C" },
   { id: "linkedin", label: "LinkedIn", Icon: Linkedin, color: "#0A66C2" },
   { id: "facebook", label: "Facebook", Icon: Facebook, color: "#1877F2" },
-  { id: "x", label: "X", Icon: Twitter, color: "#000000" },
+  { id: "x", label: "X", Icon: XLogo, color: "#000000" },
 ];
 
 type ViewMode = "list" | "grid" | "calendar";
@@ -37,16 +37,35 @@ export default function PostsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [activePlatform, setActivePlatform] = useState("instagram");
+  const [pillStyle, setPillStyle] = useState({ left: 0, width: 0, opacity: 0 });
   const [statusFilter, setStatusFilter] = useState<
     "all" | "pending" | "approved" | "rejected"
   >("all");
   const triggerRef = useRef<(() => void) | null>(null);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const tabsContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     getPosts()
       .then(setPosts)
       .catch(() => {});
   }, []);
+
+  // Slide the pill indicator to the active tab
+  useLayoutEffect(() => {
+    const activeIndex = PLATFORMS.findIndex((p) => p.id === activePlatform);
+    const btn = tabRefs.current[activeIndex];
+    const container = tabsContainerRef.current;
+    if (btn && container) {
+      const btnRect = btn.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      setPillStyle({
+        left: btnRect.left - containerRect.left,
+        width: btnRect.width,
+        opacity: 1,
+      });
+    }
+  }, [activePlatform]);
 
   const handleGenerated = useCallback(async (content: PostContent) => {
     const optimistic: Post = {
@@ -91,6 +110,8 @@ export default function PostsPage() {
     ),
   );
 
+  const activePlatformData = PLATFORMS.find((p) => p.id === activePlatform);
+
   return (
     <div className="px-6 py-8 space-y-6 pb-24 md:pb-8">
       {/* Header */}
@@ -104,39 +125,53 @@ export default function PostsPage() {
         <GenerateButton onGenerated={handleGenerated} triggerRef={triggerRef} />
       </div>
 
-      {/* Platform tabs */}
+      {/* Platform tabs — sliding pill */}
       <div
-        className="flex items-center gap-1 p-1 rounded-2xl overflow-x-auto"
+        ref={tabsContainerRef}
+        className="relative flex items-center gap-1 p-1 rounded-2xl overflow-x-auto"
         style={{ backgroundColor: "#f0ede7" }}
       >
-        {PLATFORMS.map(({ id, label, Icon, color }) => {
+        {/* Sliding white pill */}
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 4,
+            bottom: 4,
+            left: pillStyle.left,
+            width: pillStyle.width,
+            opacity: pillStyle.opacity,
+            backgroundColor: "#ffffff",
+            borderRadius: 12,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            transition: "left 220ms cubic-bezier(0.4,0,0.2,1), width 220ms cubic-bezier(0.4,0,0.2,1), opacity 150ms ease",
+            pointerEvents: "none",
+          }}
+        />
+
+        {PLATFORMS.map(({ id, label, Icon, color }, index) => {
           const active = activePlatform === id;
           return (
             <button
               key={id}
+              ref={(el) => { tabRefs.current[index] = el; }}
               onClick={() => setActivePlatform(id)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all shrink-0"
+              className="relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium whitespace-nowrap shrink-0"
               style={{
-                backgroundColor: active ? "#ffffff" : "transparent",
                 color: active ? "#0a0a0a" : "#8c8880",
                 fontFamily: "var(--font-body)",
-                boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                backgroundColor: "transparent",
+                transition: "color 200ms ease",
               }}
             >
-              {Icon ? (
-                <Icon
-                  size={14}
-                  strokeWidth={1.8}
-                  style={{ color: active ? color : "#8c8880" }}
-                />
-              ) : (
-                <span
-                  className="text-[11px] font-bold"
-                  style={{ color: active ? color : "#8c8880" }}
-                >
-                  Rd
-                </span>
-              )}
+              <Icon
+                size={14}
+                strokeWidth={1.8}
+                style={{
+                  color: active ? color : "#8c8880",
+                  transition: "color 200ms ease",
+                }}
+              />
               {label}
             </button>
           );
@@ -206,7 +241,7 @@ export default function PostsPage() {
       >
         <span>Posts otimizados para</span>
         <span className="font-semibold" style={{ color: "#0a0a0a" }}>
-          {PLATFORMS.find((p) => p.id === activePlatform)?.label}
+          {activePlatformData?.label}
         </span>
         <span className="ml-auto opacity-60">
           O filtro por plataforma será disponível em breve

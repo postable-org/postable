@@ -21,7 +21,6 @@ import {
   Radio,
   Send,
   Trash2,
-  Twitter,
 } from "lucide-react";
 import {
   useEffect,
@@ -30,6 +29,7 @@ import {
   useTransition,
   type ElementType,
 } from "react";
+import { XLogo } from "@/components/icons/XLogo";
 
 const NETWORKS: Array<{
   id: SocialNetwork;
@@ -70,7 +70,7 @@ const NETWORKS: Array<{
     color: "#111111",
     description: "Publica texto e foto.",
     oauth: "x",
-    Icon: Twitter,
+    Icon: XLogo,
   },
 ];
 

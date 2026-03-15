@@ -22,6 +22,9 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "Postable",
   description: "Social media content powered by competitive intelligence",
+  icons: {
+    icon: "/logo.webp",
+  },
 };
 
 export default function RootLayout({
