@@ -74,7 +74,7 @@ const NETWORKS: Array<{
     id: "x",
     label: "X",
     color: "#111111",
-    description: "Publica texto e foto.",
+    description: "Publica somente texto.",
     oauth: "x",
     Icon: XLogo,
   },
@@ -174,6 +174,7 @@ export default function SocialPage() {
   const publishBlocked =
     !hasAnyConnections || !hasConnectionsForSelectedNetwork;
   const selectedNetworkMeta = networkMeta(publishForm.network);
+  const isXNetwork = publishForm.network === "x";
   const selectedNetworkConnectionsCount = filteredConnections.length;
   const visibleJobs = useMemo(
     () => jobs.slice(0, visibleJobsCount),
@@ -286,6 +287,14 @@ export default function SocialPage() {
       });
       return;
     }
+    if (isXNetwork && deliveryMode === "schedule") {
+      setFeedback({
+        tone: "error",
+        text: "No X, a publicação está disponível apenas em modo texto e publicação imediata.",
+      });
+      return;
+    }
+
     if (publishForm.source === "manual" && !publishForm.text.trim()) {
       setFeedback({
         tone: "error",
@@ -322,8 +331,9 @@ export default function SocialPage() {
       }
     }
 
-    const effectiveMediaUrls =
-      uploadedMediaUrls.length > 0
+    const effectiveMediaUrls = isXNetwork
+      ? []
+      : uploadedMediaUrls.length > 0
         ? uploadedMediaUrls
         : dbGeneratedPost?.image_url
           ? [dbGeneratedPost.image_url]
@@ -340,8 +350,9 @@ export default function SocialPage() {
     }
 
     const inputHashtags = parseListField(publishForm.hashtags, "#");
-    const hashtags =
-      inputHashtags.length > 0
+    const hashtags = isXNetwork
+      ? []
+      : inputHashtags.length > 0
         ? inputHashtags
         : (dbGeneratedPost?.hashtags ?? []);
     const instagramTags = parseListField(publishForm.instagramTags, "@");
@@ -380,8 +391,9 @@ export default function SocialPage() {
         hashtags,
         instagram_tags:
           publishForm.network === "instagram" ? instagramTags : undefined,
-        publish_at:
-          deliveryMode === "schedule" && publishForm.publishAt
+        publish_at: isXNetwork
+          ? undefined
+          : deliveryMode === "schedule" && publishForm.publishAt
             ? new Date(publishForm.publishAt).toISOString()
             : undefined,
       });
@@ -481,11 +493,23 @@ export default function SocialPage() {
                 <select
                   value={publishForm.network}
                   onChange={(event) =>
-                    setPublishForm((current) => ({
-                      ...current,
-                      network: event.target.value as SocialNetwork,
-                      connectionId: "",
-                    }))
+                    setPublishForm((current) => {
+                      const nextNetwork = event.target.value as SocialNetwork;
+                      const isNextX = nextNetwork === "x";
+                      if (isNextX) {
+                        setMediaFileItems([]);
+                      }
+                      return {
+                        ...current,
+                        network: nextNetwork,
+                        connectionId: "",
+                        source: isNextX ? "manual" : current.source,
+                        postId: isNextX ? "" : current.postId,
+                        hashtags: isNextX ? "" : current.hashtags,
+                        instagramTags: isNextX ? "" : current.instagramTags,
+                        publishAt: isNextX ? "" : current.publishAt,
+                      };
+                    })
                   }
                   className="input-field"
                 >
@@ -515,35 +539,37 @@ export default function SocialPage() {
               </div>
 
               {/* Fonte do conteúdo */}
-              <div className="pill-bar w-fit">
-                {(
-                  [
-                    { id: "manual", label: "Escrever agora" },
-                    { id: "generated", label: "Usar post gerado" },
-                  ] as const
-                ).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() =>
-                      setPublishForm((current) => ({
-                        ...current,
-                        source: item.id,
-                        postId: item.id === "manual" ? "" : current.postId,
-                      }))
-                    }
-                    className={`pill-item ${
-                      publishForm.source === item.id
-                        ? "pill-item-active"
-                        : "pill-item-inactive"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+              {!isXNetwork && (
+                <div className="pill-bar w-fit">
+                  {(
+                    [
+                      { id: "manual", label: "Escrever agora" },
+                      { id: "generated", label: "Usar post gerado" },
+                    ] as const
+                  ).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() =>
+                        setPublishForm((current) => ({
+                          ...current,
+                          source: item.id,
+                          postId: item.id === "manual" ? "" : current.postId,
+                        }))
+                      }
+                      className={`pill-item ${
+                        publishForm.source === item.id
+                          ? "pill-item-active"
+                          : "pill-item-inactive"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-              {publishForm.source === "generated" ? (
+              {!isXNetwork && publishForm.source === "generated" ? (
                 <select
                   value={publishForm.postId}
                   onChange={async (event) => {
@@ -616,19 +642,21 @@ export default function SocialPage() {
                 className="textarea-field"
               />
 
-              <div className="space-y-2">
-                <input
-                  value={publishForm.hashtags}
-                  onChange={(event) =>
-                    setPublishForm((current) => ({
-                      ...current,
-                      hashtags: event.target.value,
-                    }))
-                  }
-                  placeholder="Hashtags (ex: #marketing #social)"
-                  className="input-field"
-                />
-              </div>
+              {!isXNetwork && (
+                <div className="space-y-2">
+                  <input
+                    value={publishForm.hashtags}
+                    onChange={(event) =>
+                      setPublishForm((current) => ({
+                        ...current,
+                        hashtags: event.target.value,
+                      }))
+                    }
+                    placeholder="Hashtags (ex: #marketing #social)"
+                    className="input-field"
+                  />
+                </div>
+              )}
 
               {publishForm.network === "instagram" && (
                 <div className="space-y-2">
@@ -650,128 +678,140 @@ export default function SocialPage() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <div
-                  className="rounded-2xl border-2 border-dashed border-border p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-foreground/40 transition-colors"
-                  onClick={() => mediaInputRef.current?.click()}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const files = Array.from(e.dataTransfer.files).filter((f) =>
-                      f.type.startsWith("image/"),
-                    );
-                    if (files.length > 0) void handleMediaSelect(files);
-                  }}
-                >
-                  <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
-                    <Upload size={18} className="text-muted-foreground" />
-                  </div>
-                  <p className="text-sm font-medium text-foreground">
-                    Adicionar imagem
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Clique ou arraste um arquivo (jpeg, png, webp)
-                  </p>
-                  <input
-                    ref={mediaInputRef}
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="hidden"
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files ?? []);
+              {!isXNetwork && (
+                <div className="space-y-2">
+                  <div
+                    className="rounded-2xl border-2 border-dashed border-border p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-foreground/40 transition-colors"
+                    onClick={() => mediaInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const files = Array.from(e.dataTransfer.files).filter(
+                        (f) => f.type.startsWith("image/"),
+                      );
                       if (files.length > 0) void handleMediaSelect(files);
-                      e.target.value = "";
                     }}
-                  />
-                </div>
-                {publishForm.source === "generated" &&
-                  selectedGeneratedPost?.image_url &&
-                  mediaFileItems.length === 0 && (
-                    <div className="rounded-xl border border-border bg-background p-2">
-                      <p className="text-xs text-muted-foreground mb-2">
-                        Imagem do post gerado será usada automaticamente.
-                      </p>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={selectedGeneratedPost.image_url}
-                        alt="Imagem do post gerado"
-                        className="w-20 h-20 rounded-lg object-cover border border-border"
-                      />
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
+                      <Upload size={18} className="text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      Adicionar imagem
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Clique ou arraste um arquivo (jpeg, png, webp)
+                    </p>
+                    <input
+                      ref={mediaInputRef}
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (files.length > 0) void handleMediaSelect(files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                  {publishForm.source === "generated" &&
+                    selectedGeneratedPost?.image_url &&
+                    mediaFileItems.length === 0 && (
+                      <div className="rounded-xl border border-border bg-background p-2">
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Imagem do post gerado será usada automaticamente.
+                        </p>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={selectedGeneratedPost.image_url}
+                          alt="Imagem do post gerado"
+                          className="w-20 h-20 rounded-lg object-cover border border-border"
+                        />
+                      </div>
+                    )}
+                  {mediaFileItems.length > 0 && (
+                    <div className="rounded-xl border border-border bg-background p-2 max-h-28 overflow-y-auto">
+                      <div className="flex flex-wrap gap-2">
+                        {mediaFileItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="relative w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-border"
+                          >
+                            {item.url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={item.url}
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-secondary px-1">
+                                {item.uploading ? (
+                                  <Loader2
+                                    size={14}
+                                    className="animate-spin text-muted-foreground"
+                                  />
+                                ) : (
+                                  <ImageIcon
+                                    size={14}
+                                    className="text-muted-foreground"
+                                  />
+                                )}
+                                {item.error && (
+                                  <p className="text-[9px] text-red-500 text-center leading-tight">
+                                    {item.error}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            {!item.uploading && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMediaFileItems((prev) =>
+                                    prev.filter((f) => f.id !== item.id),
+                                  )
+                                }
+                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-foreground/70 flex items-center justify-center"
+                              >
+                                <X size={10} className="text-background" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
-                {mediaFileItems.length > 0 && (
-                  <div className="rounded-xl border border-border bg-background p-2 max-h-28 overflow-y-auto">
-                    <div className="flex flex-wrap gap-2">
-                      {mediaFileItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="relative w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-border"
-                        >
-                          {item.url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={item.url}
-                              alt={item.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-secondary px-1">
-                              {item.uploading ? (
-                                <Loader2
-                                  size={14}
-                                  className="animate-spin text-muted-foreground"
-                                />
-                              ) : (
-                                <ImageIcon
-                                  size={14}
-                                  className="text-muted-foreground"
-                                />
-                              )}
-                              {item.error && (
-                                <p className="text-[9px] text-red-500 text-center leading-tight">
-                                  {item.error}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          {!item.uploading && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setMediaFileItems((prev) =>
-                                  prev.filter((f) => f.id !== item.id),
-                                )
-                              }
-                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-foreground/70 flex items-center justify-center"
-                            >
-                              <X size={10} className="text-background" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <div className="space-y-3">
-                <input
-                  type="datetime-local"
-                  value={publishForm.publishAt}
-                  onChange={(event) =>
-                    setPublishForm((current) => ({
-                      ...current,
-                      publishAt: event.target.value,
-                    }))
-                  }
-                  className="input-field"
-                  placeholder="Agendar para (opcional)"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Preencha a data para agendar, ou deixe vazio para publicar
-                  agora.
-                </p>
+                {!isXNetwork && (
+                  <>
+                    <input
+                      type="datetime-local"
+                      value={publishForm.publishAt}
+                      onChange={(event) =>
+                        setPublishForm((current) => ({
+                          ...current,
+                          publishAt: event.target.value,
+                        }))
+                      }
+                      className="input-field"
+                      placeholder="Agendar para (opcional)"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Preencha a data para agendar, ou deixe vazio para publicar
+                      agora.
+                    </p>
+                  </>
+                )}
+                {isXNetwork && (
+                  <p className="text-xs text-muted-foreground">
+                    Para X, a publicação está temporariamente disponível apenas
+                    em texto e publicação imediata.
+                  </p>
+                )}
                 <div className="flex gap-3 justify-end">
                   <button
                     type="submit"
@@ -781,17 +821,19 @@ export default function SocialPage() {
                     <Send size={15} />
                     Publicar agora
                   </button>
-                  <button
-                    type="button"
-                    disabled={publishBlocked}
-                    onClick={() => {
-                      void handlePublishSubmit("schedule");
-                    }}
-                    className="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <Radio size={15} />
-                    Agendar
-                  </button>
+                  {!isXNetwork && (
+                    <button
+                      type="button"
+                      disabled={publishBlocked}
+                      onClick={() => {
+                        void handlePublishSubmit("schedule");
+                      }}
+                      className="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Radio size={15} />
+                      Agendar
+                    </button>
+                  )}
                 </div>
               </div>
             </form>

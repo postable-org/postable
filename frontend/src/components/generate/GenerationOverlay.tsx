@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { SSEStatus, StageState } from "@/lib/hooks/useSSEGenerate";
-import { Check, X, Sparkles, ImageIcon } from "lucide-react";
+import { Check, ImageIcon, Sparkles, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface GenerationOverlayProps {
   status: SSEStatus;
@@ -26,14 +26,12 @@ const PLATFORM_LABELS: Record<string, string> = {
   instagram: "Instagram",
   linkedin: "LinkedIn",
   facebook: "Facebook",
-  x: "X (Twitter)",
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
   instagram: "#E1306C",
   linkedin: "#0A66C2",
   facebook: "#1877F2",
-  x: "#888888",
 };
 
 const CAPTION_LINES = [92, 78, 85, 60, 72];
@@ -61,24 +59,31 @@ export function GenerationOverlay({
     const currentIdx = STAGES.findIndex((s) => s.id === currentId);
 
     if (stageState.status === "started") {
-      setCompletedStages(STAGES.slice(0, currentIdx).map((s) => s.id as StageId));
+      setCompletedStages(
+        STAGES.slice(0, currentIdx).map((s) => s.id as StageId),
+      );
       setActiveStage(currentId);
-    } else if (stageState.status === "complete" || stageState.status === "skipped") {
+    } else if (
+      stageState.status === "complete" ||
+      stageState.status === "skipped"
+    ) {
       setCompletedStages((prev) =>
-        prev.includes(currentId) ? prev : [...prev, currentId]
+        prev.includes(currentId) ? prev : [...prev, currentId],
       );
     }
   }, [stageState]);
 
-  const activeIdx = activeStage ? STAGES.findIndex((s) => s.id === activeStage) : -1;
+  const activeIdx = activeStage
+    ? STAGES.findIndex((s) => s.id === activeStage)
+    : -1;
   const completedCount = completedStages.length;
 
   const progress =
     status === "connecting"
       ? 4
       : activeIdx >= 0
-      ? Math.round(((completedCount + 0.5) / STAGES.length) * 100)
-      : 4;
+        ? Math.round(((completedCount + 0.5) / STAGES.length) * 100)
+        : 4;
 
   const isImageActive = activeStage === "image-generation";
   const isCaptionActive = activeStage === "caption";
@@ -153,16 +158,14 @@ export function GenerationOverlay({
           WebkitBackdropFilter: "blur(10px)",
         }}
       >
-        <div
-          className="gen-overlay-card w-full"
-          style={{ maxWidth: "580px" }}
-        >
+        <div className="gen-overlay-card w-full" style={{ maxWidth: "580px" }}>
           <div
             className="rounded-3xl overflow-hidden shadow-2xl"
             style={{
               backgroundColor: "#f8f5ef",
               border: "1.5px solid #e4e0d8",
-              boxShadow: "0 32px 64px rgba(10,10,10,0.22), 0 8px 24px rgba(10,10,10,0.10)",
+              boxShadow:
+                "0 32px 64px rgba(10,10,10,0.22), 0 8px 24px rgba(10,10,10,0.10)",
             }}
           >
             {/* Progress bar */}
@@ -189,7 +192,10 @@ export function GenerationOverlay({
                     </div>
                     <p
                       className="font-semibold text-[15px] tracking-tight"
-                      style={{ fontFamily: "var(--font-sans)", color: "#0a0a0a" }}
+                      style={{
+                        fontFamily: "var(--font-sans)",
+                        color: "#0a0a0a",
+                      }}
                     >
                       Postable IA
                     </p>
@@ -212,10 +218,14 @@ export function GenerationOverlay({
                   className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0 mt-0.5"
                   style={{ backgroundColor: "transparent" }}
                   onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#e8e4dc";
+                    (
+                      e.currentTarget as HTMLButtonElement
+                    ).style.backgroundColor = "#e8e4dc";
                   }}
                   onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent";
+                    (
+                      e.currentTarget as HTMLButtonElement
+                    ).style.backgroundColor = "transparent";
                   }}
                   title="Cancelar geração"
                 >
@@ -229,7 +239,9 @@ export function GenerationOverlay({
               {/* Stage list */}
               <div className="space-y-1">
                 {STAGES.map((stage, stageIdx) => {
-                  const isComplete = completedStages.includes(stage.id as StageId);
+                  const isComplete = completedStages.includes(
+                    stage.id as StageId,
+                  );
                   const isActive = activeStage === stage.id;
                   const isPending = !isComplete && !isActive;
                   const stageNumber = stageIdx + 1;
@@ -251,7 +263,11 @@ export function GenerationOverlay({
                             className="w-6 h-6 rounded-full flex items-center justify-center"
                             style={{ backgroundColor: "#10B981" }}
                           >
-                            <Check size={12} strokeWidth={3} style={{ color: "#fff" }} />
+                            <Check
+                              size={12}
+                              strokeWidth={3}
+                              style={{ color: "#fff" }}
+                            />
                           </div>
                         ) : isActive ? (
                           <div className="relative w-6 h-6 flex items-center justify-center">
@@ -296,8 +312,8 @@ export function GenerationOverlay({
                           color: isComplete
                             ? "#10B981"
                             : isActive
-                            ? "#0a0a0a"
-                            : "#c4c0ba",
+                              ? "#0a0a0a"
+                              : "#c4c0ba",
                           letterSpacing: "-0.01em",
                         }}
                       >
@@ -355,7 +371,8 @@ export function GenerationOverlay({
                     <div
                       className="w-full h-full"
                       style={{
-                        background: "linear-gradient(135deg, #d4d0ca 0%, #b8b4ae 100%)",
+                        background:
+                          "linear-gradient(135deg, #d4d0ca 0%, #b8b4ae 100%)",
                       }}
                     />
                   ) : (
@@ -378,10 +395,9 @@ export function GenerationOverlay({
                       style={{
                         width: `${w}%`,
                         height: "10px",
-                        backgroundColor:
-                          captionReady
-                            ? "#a8a49e"
-                            : isCaptionActive
+                        backgroundColor: captionReady
+                          ? "#a8a49e"
+                          : isCaptionActive
                             ? "#b8b4ae"
                             : "#e4e0d8",
                         transitionDuration: "500ms",
@@ -398,8 +414,12 @@ export function GenerationOverlay({
                         style={{
                           width: `${w}px`,
                           height: "18px",
-                          backgroundColor: isCaptionActive ? "#c8c4be" : "#e8e4dc",
-                          animationDelay: isCaptionActive ? `${(i + 5) * 80}ms` : "0ms",
+                          backgroundColor: isCaptionActive
+                            ? "#c8c4be"
+                            : "#e8e4dc",
+                          animationDelay: isCaptionActive
+                            ? `${(i + 5) * 80}ms`
+                            : "0ms",
                         }}
                       />
                     ))}

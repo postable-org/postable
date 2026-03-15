@@ -316,12 +316,22 @@ function SubscriptionCard() {
     queryFn: getSubscription,
   });
 
-  const handlePortal = async () => {
+  const [openingPortal, setOpeningPortal] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
+
+  const handleBillingPortal = async () => {
+    setOpeningPortal(true);
+    setPortalError(null);
     try {
       const { url } = await createPortalSession();
       window.location.href = url;
-    } catch {
-      alert("Erro ao abrir portal de cobrança. Tente novamente.");
+    } catch (error) {
+      setPortalError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível abrir o portal de cobrança agora. Tente novamente.",
+      );
+      setOpeningPortal(false);
     }
   };
 
@@ -391,6 +401,20 @@ function SubscriptionCard() {
 
           {!isLoading && subscription && (
             <div className="space-y-4">
+              {portalError && (
+                <div
+                  className="rounded-xl px-4 py-3 text-xs"
+                  style={{
+                    backgroundColor: "#fde8e8",
+                    border: "1px solid #f5c2c2",
+                    color: "#b91c1c",
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  {portalError}
+                </div>
+              )}
+
               {subscription.status === "past_due" && (
                 <div
                   className="flex items-start gap-3 rounded-xl px-4 py-3 text-xs"
@@ -430,6 +454,12 @@ function SubscriptionCard() {
                       PLAN_LIMITS[subscription.plan]
                         .posts_per_platform_per_month,
                     ),
+                  },
+                  {
+                    label: "Analytics e insights",
+                    value: PLAN_LIMITS[subscription.plan].analytics_enabled
+                      ? "Disponível"
+                      : "Não incluído",
                   },
                   {
                     label: "Próxima cobrança",
@@ -474,18 +504,48 @@ function SubscriptionCard() {
                 </p>
               )}
 
-              <button
-                onClick={handlePortal}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
-                style={{
-                  backgroundColor: "#0a0a0a",
-                  color: "#f8f5ef",
-                  fontFamily: "var(--font-body)",
-                }}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    window.location.href = "/pricing";
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+                  style={{
+                    backgroundColor: "#0a0a0a",
+                    color: "#f8f5ef",
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  <CreditCard size={14} strokeWidth={2} />
+                  Mudar plano
+                </button>
+
+                <button
+                  onClick={() => {
+                    void handleBillingPortal();
+                  }}
+                  disabled={openingPortal}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all disabled:opacity-60"
+                  style={{
+                    backgroundColor: "#f0ede7",
+                    color: "#0a0a0a",
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  <ExternalLink size={14} strokeWidth={2} />
+                  {openingPortal
+                    ? "Abrindo cobrança..."
+                    : "Cobrança e pagamentos"}
+                </button>
+              </div>
+
+              <p
+                className="text-[11px]"
+                style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
               >
-                <ExternalLink size={14} strokeWidth={2} />
-                Gerenciar assinatura
-              </button>
+                Em cobrança e pagamentos você pode ver faturas, método de
+                pagamento, histórico e gerenciar renovação/cancelamento.
+              </p>
             </div>
           )}
         </div>

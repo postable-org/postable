@@ -1815,32 +1815,15 @@ func xMediaUploadFallbackHost() string {
 }
 
 func (p *XPublisher) Publish(ctx context.Context, conn SocialConnection, payload SocialPublishPayload) (*PublishResult, error) {
-	finalText := composeNetworkText(payload, 280)
-	body := map[string]interface{}{"text": finalText}
-
-	mediaURLs := trimStringSlice(payload.MediaURLs)
-	if len(mediaURLs) > 0 {
-		scope := xConnectionScope(conn)
-		if scope != "" && !xHasScope(scope, "media.write") {
-			return nil, fmt.Errorf("x token sem escopo media.write. Escopo atual: %q. Reconecte a conta X e autorize novamente", scope)
-		}
-		mediaIDs := make([]string, 0, len(mediaURLs))
-		for _, mediaURL := range mediaURLs {
-			mediaID, err := p.uploadXMedia(ctx, conn, mediaURL)
-			if err != nil {
-				return nil, err
-			}
-			if strings.TrimSpace(mediaID) != "" {
-				mediaIDs = append(mediaIDs, mediaID)
-			}
-			if len(mediaIDs) >= 4 {
-				break
-			}
-		}
-		if len(mediaIDs) > 0 {
-			body["media"] = map[string]interface{}{"media_ids": mediaIDs}
-		}
+	finalText := strings.TrimSpace(payload.Text)
+	if finalText == "" {
+		return nil, fmt.Errorf("x publish requires text: %w", ErrPublishPayloadInvalid)
 	}
+	if len([]rune(finalText)) > 280 {
+		runes := []rune(finalText)
+		finalText = string(runes[:279]) + "…"
+	}
+	body := map[string]interface{}{"text": finalText}
 
 	endpoint := fmt.Sprintf("%s/%s/tweets", xAPIHost(), xAPIVersion())
 	raw, status, _, err := doJSONRequest(ctx, p.client, http.MethodPost, endpoint, conn.AccessToken, body, nil)

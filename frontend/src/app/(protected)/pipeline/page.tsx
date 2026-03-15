@@ -1,6 +1,5 @@
 "use client";
 
-import { XLogo } from "@/components/icons/XLogo";
 import { getPipelineBoard } from "@/lib/api/pipeline";
 import type { Post } from "@/lib/api/posts";
 import { updatePostStatus } from "@/lib/api/posts";
@@ -67,7 +66,6 @@ const PLATFORMS = [
   { id: "instagram", label: "Instagram", Icon: Instagram, color: "#E1306C" },
   { id: "linkedin", label: "LinkedIn", Icon: Linkedin, color: "#0A66C2" },
   { id: "facebook", label: "Facebook", Icon: Facebook, color: "#1877F2" },
-  { id: "x", label: "X", Icon: XLogo, color: "#000000" },
 ];
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -336,10 +334,12 @@ export default function PipelinePage() {
     getPipelineBoard(activePlatform)
       .then((data) => {
         const asBoardPosts = (posts: Post[]): BoardPost[] =>
-          posts.map((post) => ({
-            ...post,
-            platform: post.platform || "instagram",
-          }));
+          posts
+            .filter((post) => (post.platform || "").toLowerCase() !== "x")
+            .map((post) => ({
+              ...post,
+              platform: post.platform || "instagram",
+            }));
 
         setBoard({
           draft: asBoardPosts(data.draft ?? []),

@@ -55,8 +55,12 @@ export default function PricingPage() {
       setError(null);
       const { url } = await createCheckoutSession(priceId);
       window.location.href = url;
-    } catch {
-      setError("Erro ao criar sessão de pagamento. Tente novamente.");
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Erro ao criar sessão de pagamento. Tente novamente.",
+      );
       setLoading(null);
     }
   };

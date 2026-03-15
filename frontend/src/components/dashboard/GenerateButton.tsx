@@ -1,21 +1,24 @@
 "use client";
 
-import { useSSEGenerate , type GenerateRequest} from "@/lib/hooks/useSSEGenerate";
-import type { SSEStatus, StageState } from "@/lib/hooks/useSSEGenerate";
-import { usePlatform } from "@/lib/context/PlatformContext";
-import type { PostContent } from "@/lib/api/posts";
 import { getBrand } from "@/lib/api/brands";
 import { getCompetitors } from "@/lib/api/competitors";
+import type { PostContent } from "@/lib/api/posts";
 import { getPosts } from "@/lib/api/posts";
+import { usePlatform } from "@/lib/context/PlatformContext";
+import type { SSEStatus, StageState } from "@/lib/hooks/useSSEGenerate";
+import {
+  useSSEGenerate,
+  type GenerateRequest,
+} from "@/lib/hooks/useSSEGenerate";
 import { RotateCcw, Sparkles } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 interface GenerateButtonProps {
   onGenerated: (content: PostContent) => void;
   onStatusChange?: (
     status: SSEStatus,
     stageState: StageState,
-    progressMessage: string
+    progressMessage: string,
   ) => void;
   triggerRef?: React.MutableRefObject<(() => void) | null>;
   resetRef?: React.MutableRefObject<(() => void) | null>;
@@ -23,24 +26,33 @@ interface GenerateButtonProps {
 }
 
 const PLATFORM_PLACEMENTS: Record<string, string[]> = {
-  instagram: ['feed', 'story', 'carousel'],
-  facebook: ['post', 'story'],
-  linkedin: ['post'],
-  x: ['post', 'thread'],
-}
+  instagram: ["feed", "story", "carousel"],
+  facebook: ["post", "story"],
+  linkedin: ["post"],
+};
 
 const DEFAULT_PLACEMENT: Record<string, string> = {
-  instagram: 'feed',
-  facebook: 'post',
-  linkedin: 'post',
-  x: 'post',
-}
+  instagram: "feed",
+  facebook: "post",
+  linkedin: "post",
+};
 
 const EMPTY_PAYLOAD: GenerateRequest = {
-  business_profile: { niche: "", city: "", state: "", tone: "", brand_identity: "" },
+  business_profile: {
+    niche: "",
+    city: "",
+    state: "",
+    tone: "",
+    brand_identity: "",
+  },
   competitor_handles: [],
   post_history: [],
-  campaign_brief: { goal: "", target_audience: "", cta_channel: "", theme_hint: null },
+  campaign_brief: {
+    goal: "",
+    target_audience: "",
+    cta_channel: "",
+    theme_hint: null,
+  },
   platform: "instagram",
   placement: "feed",
 };
@@ -53,13 +65,16 @@ export function GenerateButton({
   dark,
 }: GenerateButtonProps) {
   const { platform } = usePlatform();
-  const [placement, setPlacement] = useState(DEFAULT_PLACEMENT[platform] ?? 'feed')
+  const [placement, setPlacement] = useState(
+    DEFAULT_PLACEMENT[platform] ?? "feed",
+  );
 
   useEffect(() => {
-    setPlacement(DEFAULT_PLACEMENT[platform] ?? 'feed')
-  }, [platform])
+    setPlacement(DEFAULT_PLACEMENT[platform] ?? "feed");
+  }, [platform]);
 
-  const { status, stageState, progressMessage, error, start, reset } = useSSEGenerate(onGenerated);
+  const { status, stageState, progressMessage, error, start, reset } =
+    useSSEGenerate(onGenerated);
 
   const handleStart = async () => {
     try {
@@ -148,10 +163,12 @@ export function GenerateButton({
           fontFamily: "var(--font-body)",
           color: dark ? "#f8f5ef" : "#0a0a0a",
           backgroundColor: dark ? "rgba(248,245,239,0.1)" : "#f0ede7",
-          border: dark ? "1px solid rgba(248,245,239,0.15)" : "1.5px solid #e4e0d8",
+          border: dark
+            ? "1px solid rgba(248,245,239,0.15)"
+            : "1.5px solid #e4e0d8",
         }}
       >
-        {(PLATFORM_PLACEMENTS[platform] ?? ['post']).map((p) => (
+        {(PLATFORM_PLACEMENTS[platform] ?? ["post"]).map((p) => (
           <option key={p} value={p}>
             {p.charAt(0).toUpperCase() + p.slice(1)}
           </option>

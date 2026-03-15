@@ -139,6 +139,7 @@ func (s *SubscriptionService) Upsert(ctx context.Context, sub *Subscription) err
 			 current_period_start, current_period_end, cancel_at_period_end)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 ON CONFLICT (stripe_subscription_id) DO UPDATE SET
+			stripe_customer_id   = EXCLUDED.stripe_customer_id,
 			plan                 = EXCLUDED.plan,
 			status               = EXCLUDED.status,
 			current_period_start = EXCLUDED.current_period_start,

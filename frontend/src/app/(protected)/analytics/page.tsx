@@ -79,7 +79,6 @@ function formatPlatform(value: string) {
     instagram: "Instagram",
     linkedin: "LinkedIn",
     facebook: "Facebook",
-    x: "X",
   };
   return map[value] ?? value;
 }
@@ -395,6 +394,88 @@ function AnalyticsChart({ data }: { data: AnalyticsDailyPoint[] }) {
   );
 }
 
+function PlatformComparisonChart({
+  platforms,
+  metric,
+}: {
+  platforms: AnalyticsPlatformStat[];
+  metric: "efficiency" | "volume";
+}) {
+  if (platforms.length === 0) {
+    return <ChartPlaceholder height={210} label="Sem redes para comparar" />;
+  }
+
+  const rows = platforms
+    .map((platform) => {
+      const engagements = platform.likes + platform.comments + platform.shares;
+      const value =
+        metric === "efficiency" ? platform.engagement_rate : platform.reach;
+      return {
+        id: platform.id,
+        label: platform.label,
+        color: platform.color,
+        accountName: platform.account_name,
+        posts: platform.posts,
+        engagements,
+        value,
+      };
+    })
+    .sort((a, b) => b.value - a.value);
+
+  const maxValue = Math.max(...rows.map((row) => row.value), 1);
+
+  return (
+    <div className="space-y-3">
+      {rows.map((row) => {
+        const formattedValue =
+          metric === "efficiency"
+            ? formatPercent(row.value)
+            : formatCompactNumber(row.value);
+        return (
+          <div key={row.id} className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p
+                  className="text-xs font-medium truncate"
+                  style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
+                >
+                  {row.label}
+                  {row.accountName ? ` · ${row.accountName}` : ""}
+                </p>
+                <p
+                  className="text-[10px]"
+                  style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+                >
+                  {formatCompactNumber(row.engagements)} engajamentos ·{" "}
+                  {row.posts} posts
+                </p>
+              </div>
+              <span
+                className="text-xs font-semibold"
+                style={{ color: "#0a0a0a", fontFamily: "var(--font-sans)" }}
+              >
+                {formattedValue}
+              </span>
+            </div>
+            <div
+              className="rounded-full overflow-hidden"
+              style={{ height: 8, backgroundColor: "#f0ede7" }}
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.max((row.value / maxValue) * 100, row.value > 0 ? 8 : 0)}%`,
+                  backgroundColor: row.color,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function PlatformBreakdown({
   platforms,
 }: {
@@ -648,6 +729,10 @@ function PostsTable({
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState<AnalyticsRange>("30d");
+  const [chartView, setChartView] = useState<"trend" | "comparison">("trend");
+  const [comparisonMetric, setComparisonMetric] = useState<
+    "efficiency" | "volume"
+  >("efficiency");
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["analytics", range],
     queryFn: () => getAnalytics(range),
@@ -660,9 +745,13 @@ export default function AnalyticsPage() {
 
   const analytics = data;
   const isConnected = analytics?.has_connected_social ?? false;
-  const platforms = analytics?.platforms ?? [];
+  const platforms = (analytics?.platforms ?? []).filter(
+    (platform) => platform.id !== "x",
+  );
   const daily = analytics?.daily ?? [];
-  const topPosts = analytics?.top_posts ?? [];
+  const topPosts = (analytics?.top_posts ?? []).filter(
+    (post) => post.platform !== "x",
+  );
   const breakdown = analytics?.breakdown ?? {
     likes: 0,
     comments: 0,
@@ -865,9 +954,42 @@ export default function AnalyticsPage() {
               className="text-sm font-semibold"
               style={{ fontFamily: "var(--font-sans)" }}
             >
-              Alcance & engajamento
+              {chartView === "trend"
+                ? "Alcance & engajamento"
+                : "Comparativo de redes sociais"}
             </h2>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div
+                className="flex items-center gap-0.5 p-1 rounded-xl"
+                style={{ backgroundColor: "#f0ede7" }}
+              >
+                {[
+                  { key: "trend", label: "Tendência" },
+                  { key: "comparison", label: "Comparativo" },
+                ].map((view) => (
+                  <button
+                    key={view.key}
+                    type="button"
+                    onClick={() =>
+                      setChartView(view.key as "trend" | "comparison")
+                    }
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+                    style={{
+                      backgroundColor:
+                        chartView === view.key ? "#0a0a0a" : "transparent",
+                      color: chartView === view.key ? "#f8f5ef" : "#8c8880",
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    {view.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {chartView === "trend" ? (
+            <div className="flex items-center gap-3 mb-1">
               {[
                 { color: "#6366F1", label: "Alcance" },
                 { color: "#E1306C", label: "Engajamento" },
@@ -886,18 +1008,50 @@ export default function AnalyticsPage() {
                 </div>
               ))}
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2 mb-1">
+              {[
+                { key: "efficiency", label: "Eficiência (eng. rate)" },
+                { key: "volume", label: "Volume (alcance)" },
+              ].map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() =>
+                    setComparisonMetric(option.key as "efficiency" | "volume")
+                  }
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+                  style={{
+                    backgroundColor:
+                      comparisonMetric === option.key ? "#0a0a0a" : "#f0ede7",
+                    color:
+                      comparisonMetric === option.key ? "#f8f5ef" : "#6b6760",
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <p
             className="text-xs mb-4"
             style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
           >
-            {RANGE_LABELS[range]} • série diária baseada em publicações do
-            período
+            {chartView === "trend"
+              ? `${RANGE_LABELS[range]} • série diária baseada em publicações do período`
+              : "Compare redes por eficiência e volume para decidir onde investir mais."}
           </p>
           {isLoading ? (
             <Skeleton className="w-full h-[210px]" />
-          ) : (
+          ) : chartView === "trend" ? (
             <AnalyticsChart data={daily} />
+          ) : (
+            <PlatformComparisonChart
+              platforms={platforms}
+              metric={comparisonMetric}
+            />
           )}
         </div>
 

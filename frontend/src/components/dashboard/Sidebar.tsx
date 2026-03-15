@@ -1,6 +1,5 @@
 "use client";
 
-import { XLogo } from "@/components/icons/XLogo";
 import { createPortalSession, getSubscription } from "@/lib/api/subscription";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -34,7 +33,6 @@ const PLATFORMS = [
   { id: "instagram", label: "Instagram", Icon: Instagram, color: "#E1306C" },
   { id: "linkedin", label: "LinkedIn", Icon: Linkedin, color: "#0A66C2" },
   { id: "facebook", label: "Facebook", Icon: Facebook, color: "#1877F2" },
-  { id: "x", label: "X", Icon: XLogo, color: "#FFFFFF" },
 ];
 
 interface SidebarProps {
@@ -221,7 +219,7 @@ export function Sidebar({
           >
             Gerar para
           </p>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-1 gap-1.5">
             {PLATFORMS.map(({ id, label, Icon, color }) => {
               const isSelected = selectedPlatform === id;
               return (

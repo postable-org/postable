@@ -2,7 +2,6 @@
 
 import { GenerateButton } from "@/components/dashboard/GenerateButton";
 import { PostCard } from "@/components/dashboard/PostCard";
-import { XLogo } from "@/components/icons/XLogo";
 import type { Post, PostContent } from "@/lib/api/posts";
 import { getPosts } from "@/lib/api/posts";
 import {
@@ -25,7 +24,6 @@ const PLATFORMS = [
   { id: "instagram", label: "Instagram", Icon: Instagram, color: "#E1306C" },
   { id: "linkedin", label: "LinkedIn", Icon: Linkedin, color: "#0A66C2" },
   { id: "facebook", label: "Facebook", Icon: Facebook, color: "#1877F2" },
-  { id: "x", label: "X", Icon: XLogo, color: "#000000" },
 ];
 
 type ViewMode = "list" | "grid" | "calendar";
@@ -204,7 +202,9 @@ export default function PostsPage() {
               key={id}
               onClick={() => setStatusFilter(id)}
               className={`filter-chip transition-all ${
-                statusFilter === id ? "filter-chip-active" : "filter-chip-inactive"
+                statusFilter === id
+                  ? "filter-chip-active"
+                  : "filter-chip-inactive"
               }`}
             >
               {label}
@@ -222,7 +222,9 @@ export default function PostsPage() {
               key={id}
               onClick={() => setViewMode(id)}
               className={`p-2 rounded-lg transition-all ${
-                viewMode === id ? "bg-card text-foreground" : "text-muted-foreground"
+                viewMode === id
+                  ? "bg-card text-foreground"
+                  : "text-muted-foreground"
               }`}
             >
               <Icon size={14} strokeWidth={1.8} />

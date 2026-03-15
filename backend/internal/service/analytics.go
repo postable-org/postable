@@ -182,8 +182,9 @@ func (s *AnalyticsService) listConnectionCounts(ctx context.Context, userID stri
 		SELECT id, network, account_name
 		FROM social_connections
 		WHERE user_id = $1
+		  AND network <> $2
 		ORDER BY network, created_at ASC
-	`, userID)
+	`, userID, SocialNetworkX)
 	if err != nil {
 		return nil, err
 	}
@@ -207,10 +208,11 @@ func (s *AnalyticsService) listAnalyticsJobs(ctx context.Context, userID string,
 		FROM social_post_jobs spj
 		LEFT JOIN social_connections sc ON sc.id = spj.connection_id
 		WHERE spj.user_id = $1
+		  AND spj.network <> $4
 		  AND COALESCE(spj.published_at, spj.scheduled_for) >= $2
 		  AND COALESCE(spj.published_at, spj.scheduled_for) < $3
 		ORDER BY COALESCE(spj.published_at, spj.scheduled_for) DESC, spj.created_at DESC
-	`, userID, from, to)
+	`, userID, from, to, SocialNetworkX)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +338,7 @@ func buildAnalyticsResponse(rangeKey string, now time.Time, days int, currentSta
 				point.Engagement += metrics.Engagements()
 			}
 
-				if stat, ok := platformIndex[job.ConnectionID]; ok {
+			if stat, ok := platformIndex[job.ConnectionID]; ok {
 				stat.Posts++
 				stat.Reach += metrics.Reach
 				stat.Likes += metrics.Likes
@@ -387,7 +389,7 @@ func buildAnalyticsResponse(rangeKey string, now time.Time, days int, currentSta
 			ScheduledPosts:      currentScheduled,
 			FailedPosts:         currentFailed,
 			ConnectedAccounts:   connectedAccounts,
-				ConnectedPlatforms:  len(uniqueNetworks),
+			ConnectedPlatforms:  len(uniqueNetworks),
 		},
 		Daily:     daily,
 		Platforms: platforms,

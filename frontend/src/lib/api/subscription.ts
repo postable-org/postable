@@ -14,6 +14,14 @@ export const PLAN_LIMITS = {
   agency:   { posts_per_platform_per_month: 60,  analytics_enabled: true  },
 } as const;
 
+async function readApiError(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = await res.json() as { error?: string };
+    if (data?.error) return data.error;
+  } catch {}
+  return fallback;
+}
+
 export async function getSubscription(): Promise<Subscription | null> {
   const res = await apiFetch('/api/subscription');
   if (res.status === 402 || res.status === 404) return null;
@@ -26,12 +34,12 @@ export async function createCheckoutSession(priceId: string): Promise<{ url: str
     method: 'POST',
     body: JSON.stringify({ price_id: priceId }),
   });
-  if (!res.ok) throw new Error('Failed to create checkout session');
+  if (!res.ok) throw new Error(await readApiError(res, 'Failed to create checkout session'));
   return res.json();
 }
 
 export async function createPortalSession(): Promise<{ url: string }> {
   const res = await apiFetch('/api/billing/portal', { method: 'POST' });
-  if (!res.ok) throw new Error('Failed to create portal session');
+  if (!res.ok) throw new Error(await readApiError(res, 'Failed to create portal session'));
   return res.json();
 }

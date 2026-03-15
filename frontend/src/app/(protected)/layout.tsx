@@ -67,7 +67,7 @@ function ProtectedLayoutInner({ children }: { children: React.ReactNode }) {
           </span>
           {/* Mobile platform selector */}
           <div className="flex items-center gap-1">
-            {["Instagram", "LinkedIn", "X"].map((p) => (
+            {["Instagram", "LinkedIn", "Facebook"].map((p) => (
               <button
                 key={p}
                 onClick={() => setPlatform(p.toLowerCase())}
