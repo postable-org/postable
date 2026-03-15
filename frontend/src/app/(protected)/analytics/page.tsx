@@ -306,7 +306,7 @@ export default function AnalyticsPage() {
   const isConnected = false; // replace with real connection check from API
 
   return (
-    <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+    <div className="px-6 py-8 space-y-8 pb-24 md:pb-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>

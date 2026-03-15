@@ -317,7 +317,7 @@ export default function ContextPage() {
   };
 
   return (
-    <div className="px-6 py-8 space-y-5 pb-24 md:pb-8 max-w-3xl">
+    <div className="px-6 py-8 space-y-5 pb-24 md:pb-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>

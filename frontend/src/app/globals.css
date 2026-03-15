@@ -137,6 +137,23 @@
   animation: step-fade-down 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/* ─── Shimmer loading skeleton ─── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    #dedad4 25%,
+    #eeebe5 50%,
+    #dedad4 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
 /* ─── Logo glow utility ─── */
 .logo-glow {
   filter: drop-shadow(0 0 12px rgba(166, 200, 249, 0.45));

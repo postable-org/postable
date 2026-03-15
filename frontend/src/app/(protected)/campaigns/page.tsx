@@ -45,32 +45,6 @@ const STATUS_CONFIG: Record<
   completed: { label: "Concluída", color: "#6366f1", bg: "#ede9fe" },
 };
 
-const DEMO_CAMPAIGNS: Campaign[] = [
-  {
-    id: "1",
-    name: "Lançamento Verão 2025",
-    description:
-      "Campanha de lançamento da nova coleção de verão com 15 posts ao longo de 3 semanas.",
-    platform: "instagram",
-    status: "active",
-    startDate: "2025-03-01",
-    endDate: "2025-03-21",
-    postCount: 15,
-    goal: "Aumentar reconhecimento da marca",
-  },
-  {
-    id: "2",
-    name: "Promoção Dia das Mães",
-    description:
-      "Sequência de posts para engajar clientes antes do Dia das Mães.",
-    platform: "facebook",
-    status: "draft",
-    startDate: "2025-04-25",
-    endDate: "2025-05-11",
-    postCount: 8,
-    goal: "Gerar vendas diretas",
-  },
-];
 
 function addDaysToISODate(days: number) {
   const date = new Date();
@@ -484,7 +458,7 @@ function NewCampaignModal({
 }
 
 export default function CampaignsPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>(DEMO_CAMPAIGNS);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [referenceNow] = useState(() => Date.now());
   const [showModal, setShowModal] = useState(false);
   const [filterPlatform, setFilterPlatform] = useState<PlatformId | "all">(

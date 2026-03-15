@@ -12,16 +12,24 @@ function ProtectedLayoutInner({
   children: React.ReactNode;
 }) {
   const { platform, setPlatform } = usePlatform();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: "#f8f5ef" }}>
       {/* Sidebar — desktop only */}
       <div className="hidden md:block">
-        <Sidebar selectedPlatform={platform} onPlatformChange={setPlatform} />
+        <Sidebar
+          selectedPlatform={platform}
+          onPlatformChange={setPlatform}
+          isCollapsed={!sidebarOpen}
+          onToggleCollapse={() => setSidebarOpen((v) => !v)}
+        />
       </div>
 
       {/* Main content */}
-      <div className="flex-1 md:ml-[220px] flex flex-col min-h-screen">
+      <div
+        className={`flex-1 flex flex-col min-h-screen transition-all duration-200 ${sidebarOpen ? "md:ml-[220px]" : "md:ml-[64px]"}`}
+      >
         {/* Mobile top bar */}
         <div
           className="md:hidden flex items-center justify-between px-4 py-3 border-b sticky top-0 z-30"

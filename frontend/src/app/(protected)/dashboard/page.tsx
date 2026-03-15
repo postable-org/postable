@@ -6,6 +6,9 @@ import type { Post, PostContent } from "@/lib/api/posts";
 import { GenerateButton } from "@/components/dashboard/GenerateButton";
 import { PostCard } from "@/components/dashboard/PostCard";
 import { PostReview } from "@/components/generate/PostReview";
+import { GenerationOverlay } from "@/components/generate/GenerationOverlay";
+import { usePlatform } from "@/lib/context/PlatformContext";
+import type { SSEStatus, StageState } from "@/lib/hooks/useSSEGenerate";
 import { Calendar, Zap, Clock, CheckCircle, TrendingUp } from "lucide-react";
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
@@ -50,10 +53,33 @@ function StatCard({
 // ── Dashboard Page ─────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const { platform } = usePlatform();
   const [posts, setPosts] = useState<Post[]>([]);
   const [mode, setMode] = useState<"quick" | "calendar">("quick");
   const [reviewContent, setReviewContent] = useState<PostContent | null>(null);
   const triggerGenerateRef = useRef<(() => void) | null>(null);
+  const resetGenerateRef = useRef<(() => void) | null>(null);
+
+  // Generation overlay state
+  const [genStatus, setGenStatus] = useState<SSEStatus>("idle");
+  const [genStage, setGenStage] = useState<StageState>({ stage: null, status: null, message: "" });
+  const [genMessage, setGenMessage] = useState("");
+
+  const handleGenStatusChange = useCallback(
+    (status: SSEStatus, stageState: StageState, progressMessage: string) => {
+      setGenStatus(status);
+      setGenStage(stageState);
+      setGenMessage(progressMessage);
+    },
+    []
+  );
+
+  const handleCancelGeneration = useCallback(() => {
+    resetGenerateRef.current?.();
+    setGenStatus("idle");
+    setGenStage({ stage: null, status: null, message: "" });
+    setGenMessage("");
+  }, []);
 
   useEffect(() => {
     getPosts()
@@ -146,6 +172,15 @@ export default function DashboardPage() {
 
   return (
     <>
+      {/* Generation progress overlay */}
+      <GenerationOverlay
+        status={genStatus}
+        stageState={genStage}
+        progressMessage={genMessage}
+        platform={platform}
+        onCancel={handleCancelGeneration}
+      />
+
       {/* Review overlay — appears after generation */}
       {reviewContent && (
         <PostReview
@@ -156,7 +191,7 @@ export default function DashboardPage() {
         />
       )}
 
-      <div className="px-6 py-8 max-w-5xl mx-auto space-y-8 pb-24 md:pb-8">
+      <div className="px-6 py-8 space-y-8 pb-24 md:pb-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
@@ -246,7 +281,9 @@ export default function DashboardPage() {
                 </div>
                 <GenerateButton
                   onGenerated={handleGenerated}
+                  onStatusChange={handleGenStatusChange}
                   triggerRef={triggerGenerateRef}
+                  resetRef={resetGenerateRef}
                   dark
                 />
               </div>
@@ -353,7 +390,9 @@ export default function DashboardPage() {
             onStatusChange={handleStatusChange}
             onRegenerate={handleRegenerate}
             onGenerated={handleGenerated}
+            onGenStatusChange={handleGenStatusChange}
             triggerRef={triggerGenerateRef}
+            resetRef={resetGenerateRef}
           />
         )}
       </div>
@@ -368,13 +407,17 @@ function CalendarView({
   onStatusChange,
   onRegenerate,
   onGenerated,
+  onGenStatusChange,
   triggerRef,
+  resetRef,
 }: {
   posts: Post[];
   onStatusChange: (id: string, status: "approved" | "rejected") => void;
   onRegenerate: (id: string) => void;
   onGenerated: (c: PostContent) => void;
+  onGenStatusChange: (status: SSEStatus, stageState: StageState, progressMessage: string) => void;
   triggerRef: React.MutableRefObject<(() => void) | null>;
+  resetRef: React.MutableRefObject<(() => void) | null>;
 }) {
   function groupByDate(posts: Post[]): Record<string, Post[]> {
     const g: Record<string, Post[]> = {};
@@ -396,7 +439,12 @@ function CalendarView({
         <h2 className="text-base font-semibold" style={{ fontFamily: "var(--font-sans)" }}>
           Calendário de posts
         </h2>
-        <GenerateButton onGenerated={onGenerated} triggerRef={triggerRef} />
+        <GenerateButton
+          onGenerated={onGenerated}
+          onStatusChange={onGenStatusChange}
+          triggerRef={triggerRef}
+          resetRef={resetRef}
+        />
       </div>
 
       {dates.length === 0 ? (

@@ -89,9 +89,29 @@ func main() {
 			slog.Error("failed to parse database URL", "error", err)
 			os.Exit(1)
 		}
-		// Force IPv4 — Railway free plan has no IPv6 outbound routing
+		// Force IPv4 — pgconn resolves DNS before calling DialFunc, so we must
+		// intercept at the lookup stage too; otherwise it hands us an IPv6 literal
+		// which tcp4 cannot dial (Railway free plan has no IPv6 outbound routing).
+		cfg.ConnConfig.LookupFunc = func(ctx context.Context, host string) ([]string, error) {
+			ips, err := net.DefaultResolver.LookupIP(ctx, "ip4", host)
+			if err != nil || len(ips) == 0 {
+				// fall back to default resolution so we don't break local dev
+				return net.DefaultResolver.LookupHost(ctx, host)
+			}
+			addrs := make([]string, len(ips))
+			for i, ip := range ips {
+				addrs[i] = ip.String()
+			}
+			return addrs, nil
+		}
+		// Try IPv4 first (required on Railway which has no IPv6 outbound routing).
+		// Fall back to dual-stack tcp so local dev works when Supabase resolves to IPv6.
 		cfg.ConnConfig.DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "tcp4", addr)
+			d := &net.Dialer{}
+			if conn, err := d.DialContext(ctx, "tcp4", addr); err == nil {
+				return conn, nil
+			}
+			return d.DialContext(ctx, "tcp", addr)
 		}
 		pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
 		if err != nil {

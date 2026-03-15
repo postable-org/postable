@@ -1,6 +1,7 @@
 "use client";
 
 import { useSSEGenerate } from "@/lib/hooks/useSSEGenerate";
+import type { SSEStatus, StageState } from "@/lib/hooks/useSSEGenerate";
 import { usePlatform } from "@/lib/context/PlatformContext";
 import type { PostContent } from "@/lib/api/posts";
 import { RotateCcw, Sparkles } from "lucide-react";
@@ -8,23 +9,45 @@ import { useEffect } from "react";
 
 interface GenerateButtonProps {
   onGenerated: (content: PostContent) => void;
+  onStatusChange?: (
+    status: SSEStatus,
+    stageState: StageState,
+    progressMessage: string
+  ) => void;
   triggerRef?: React.MutableRefObject<(() => void) | null>;
+  resetRef?: React.MutableRefObject<(() => void) | null>;
   dark?: boolean;
 }
 
 export function GenerateButton({
   onGenerated,
+  onStatusChange,
   triggerRef,
+  resetRef,
   dark,
 }: GenerateButtonProps) {
   const { platform } = usePlatform();
-  const { status, progressMessage, error, start, reset } = useSSEGenerate(onGenerated);
+  const { status, stageState, progressMessage, error, start, reset } =
+    useSSEGenerate(onGenerated);
 
+  // Expose trigger
   useEffect(() => {
     if (triggerRef) {
       triggerRef.current = () => start(platform);
     }
-  }, [start, triggerRef]);
+  }, [start, triggerRef, platform]);
+
+  // Expose reset
+  useEffect(() => {
+    if (resetRef) {
+      resetRef.current = reset;
+    }
+  }, [reset, resetRef]);
+
+  // Notify parent of status/stage changes
+  useEffect(() => {
+    onStatusChange?.(status, stageState, progressMessage);
+  }, [status, stageState, progressMessage, onStatusChange]);
 
   const isActive = status === "connecting" || status === "streaming";
 
@@ -43,7 +66,7 @@ export function GenerateButton({
         }}
       >
         <RotateCcw size={14} strokeWidth={2} />
-        {error ? "Tentar novamente" : "Tentar novamente"}
+        Tentar novamente
       </button>
     );
   }
