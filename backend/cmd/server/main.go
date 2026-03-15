@@ -55,7 +55,7 @@ func main() {
 
 	allowedOriginsRaw := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOriginsRaw == "" {
-		allowedOriginsRaw = "http://localhost:3001,http://localhost:3000"
+		allowedOriginsRaw = "http://localhost:*,http://127.0.0.1:*"
 	}
 	var allowedOrigins []string
 	for _, o := range strings.Split(allowedOriginsRaw, ",") {
@@ -72,6 +72,7 @@ func main() {
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
+	slog.Info("configured CORS origins", "origins", allowedOrigins)
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 

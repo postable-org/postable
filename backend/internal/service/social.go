@@ -892,7 +892,7 @@ func (p *InstagramPublisher) Publish(ctx context.Context, conn SocialConnection,
 	}
 
 	publishBody := map[string]string{"creation_id": creationID}
-	url := fmt.Sprintf("https://graph.instagram.com/v25.0/%s/media_publish", conn.AccountID)
+	url := fmt.Sprintf("https://graph.facebook.com/v25.0/%s/media_publish", conn.AccountID)
 	raw, status, _, err := doJSONRequest(ctx, p.client, http.MethodPost, url, conn.AccessToken, publishBody, nil)
 	if err != nil {
 		return nil, err
@@ -926,7 +926,7 @@ func (p *InstagramPublisher) createMediaContainer(ctx context.Context, conn Soci
 		"media_type": "CAROUSEL",
 		"children":   strings.Join(children, ","),
 	}
-	url := fmt.Sprintf("https://graph.instagram.com/v25.0/%s/media", conn.AccountID)
+	url := fmt.Sprintf("https://graph.facebook.com/v25.0/%s/media", conn.AccountID)
 	raw, status, _, err := doJSONRequest(ctx, p.client, http.MethodPost, url, conn.AccessToken, body, nil)
 	if err != nil {
 		return "", err
@@ -959,7 +959,7 @@ func (p *InstagramPublisher) createSingleInstagramContainer(ctx context.Context,
 	} else {
 		body["image_url"] = mediaURL
 	}
-	url := fmt.Sprintf("https://graph.instagram.com/v25.0/%s/media", conn.AccountID)
+	url := fmt.Sprintf("https://graph.facebook.com/v25.0/%s/media", conn.AccountID)
 	raw, status, _, err := doJSONRequest(ctx, p.client, http.MethodPost, url, conn.AccessToken, body, nil)
 	if err != nil {
 		return "", err
