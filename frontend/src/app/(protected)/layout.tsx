@@ -39,7 +39,7 @@ function ProtectedLayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div
-        className={`flex-1 flex flex-col min-h-screen transition-all duration-200 ${sidebarOpen ? "md:ml-[220px]" : "md:ml-[64px]"}`}
+        className={`flex-1 flex flex-col min-h-screen min-w-0 transition-all duration-200 ${sidebarOpen ? "md:ml-[220px]" : "md:ml-[64px]"}`}
       >
         {/* Mobile top bar */}
         <div
@@ -73,7 +73,7 @@ function ProtectedLayoutInner({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Page content with platform in context via data attr */}
-        <main className="flex-1" data-platform={platform}>
+        <main className="flex-1 min-w-0 flex flex-col" data-platform={platform}>
           {children}
         </main>
       </div>

@@ -78,7 +78,7 @@ export function Sidebar({
 
   return (
     <aside
-      className="fixed left-0 top-0 h-full flex flex-col z-40 overflow-y-auto overflow-x-hidden transition-all duration-200"
+      className="fixed left-0 top-0 h-full flex flex-col z-40 overflow-y-auto overflow-x-hidden transition-all duration-200 hide-scrollbar"
       style={{
         width: isCollapsed ? "64px" : "220px",
         backgroundColor: "#0a0a0a",

@@ -182,3 +182,13 @@
 .select-card.selected svg {
   color: #f8f5ef;
 }
+
+/* ─── Utilities ─── */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
