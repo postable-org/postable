@@ -1,6 +1,21 @@
 version: '3.9'
 
 services:
+  postable-ai:
+    build:
+      context: ./postable-ai
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./postable-ai/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   backend:
     build:
       context: ./backend
@@ -12,9 +27,12 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
       - DATABASE_URL=${DATABASE_URL}
-      - PYTHON_AGENT_URL=${PYTHON_AGENT_URL:-http://host.docker.internal:8000}
+      - PYTHON_AGENT_URL=${PYTHON_AGENT_URL:-http://postable-ai:8000}
     env_file:
       - ./backend/.env
+    depends_on:
+      postable-ai:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]

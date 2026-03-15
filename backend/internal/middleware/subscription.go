@@ -9,8 +9,6 @@ import (
 	"postable/internal/service"
 )
 
-type contextKey string
-
 const subscriptionKey contextKey = "subscription"
 
 // SubscriptionServiceInterface is the subset needed by the subscription middleware.
