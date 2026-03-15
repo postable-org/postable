@@ -297,6 +297,21 @@ func (s *SocialService) SubmitPublish(ctx context.Context, userID string, in Soc
 		if execErr != nil {
 			return executed, nil
 		}
+		// Asynchronously fetch insights a few seconds after publish so the
+		// analytics page shows metrics without requiring a manual refresh.
+		if executed != nil && executed.ProviderPostID != nil {
+			go func() {
+				bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				// Brief delay: give the platform time to process the post.
+				if err := sleepWithContext(bgCtx, 5*time.Second); err != nil {
+					return
+				}
+				if _, err := s.FetchAndSaveInsights(bgCtx, userID); err != nil {
+					slog.Warn("social publish: background insights fetch failed", "jobID", executed.ID, "error", err)
+				}
+			}()
+		}
 		return executed, nil
 	}
 
@@ -366,6 +381,196 @@ func (s *SocialService) ProcessDueJobs(ctx context.Context, now time.Time, limit
 	}
 
 	return processed, nil
+}
+
+// FetchAndSaveInsights pulls post-level metrics from the platform API for all
+// published jobs that have a provider_post_id. Merges the result into
+// provider_response so the analytics service can pick it up immediately.
+// Returns the number of jobs updated.
+func (s *SocialService) FetchAndSaveInsights(ctx context.Context, userID string) (int, error) {
+	if s.db == nil {
+		return 0, ErrSocialUnavailable
+	}
+
+	type insightJob struct {
+		JobID          string
+		Network        string
+		ProviderPostID string
+		AccessToken    string
+	}
+
+	rows, err := s.db.Query(ctx, `
+		SELECT spj.id, spj.network, spj.provider_post_id, sc.access_token
+		FROM social_post_jobs spj
+		JOIN social_connections sc ON sc.id = spj.connection_id
+		WHERE spj.user_id = $1
+		  AND spj.status = $2
+		  AND spj.provider_post_id IS NOT NULL
+		ORDER BY spj.published_at DESC
+		LIMIT 100
+	`, userID, SocialJobPublished)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	jobs := make([]insightJob, 0)
+	for rows.Next() {
+		var ij insightJob
+		if err := rows.Scan(&ij.JobID, &ij.Network, &ij.ProviderPostID, &ij.AccessToken); err != nil {
+			return 0, err
+		}
+		jobs = append(jobs, ij)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	updated := 0
+	for _, job := range jobs {
+		var metrics map[string]interface{}
+		switch job.Network {
+		case SocialNetworkInstagram, SocialNetworkFacebook:
+			metrics = fetchMetaInsights(ctx, httpClient, job.ProviderPostID, job.AccessToken)
+		case SocialNetworkLinkedIn:
+			metrics = fetchLinkedInInsights(ctx, httpClient, job.ProviderPostID, job.AccessToken)
+		default:
+			continue
+		}
+		if len(metrics) == 0 {
+			continue
+		}
+		raw, err := json.Marshal(metrics)
+		if err != nil {
+			continue
+		}
+		if _, err := s.db.Exec(ctx, `
+			UPDATE social_post_jobs
+			SET provider_response = $1, updated_at = now()
+			WHERE id = $2
+		`, raw, job.JobID); err != nil {
+			slog.Warn("social insights: failed to save provider_response", "jobID", job.JobID, "error", err)
+			continue
+		}
+		updated++
+	}
+	return updated, nil
+}
+
+// fetchMetaInsights calls Meta's Graph API to get post-level metrics.
+// It fetches basic engagement fields first, then tries the /insights endpoint
+// with multiple metric sets (different media types support different metrics).
+func fetchMetaInsights(ctx context.Context, client *http.Client, mediaID, accessToken string) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	// Basic fields available on all Instagram/Facebook media.
+	basicURL := fmt.Sprintf(
+		"https://graph.facebook.com/v25.0/%s?fields=like_count,comments_count,timestamp,media_type&access_token=%s",
+		mediaID, accessToken,
+	)
+	if raw, status, _, err := doJSONRequest(ctx, client, http.MethodGet, basicURL, "", nil, nil); err == nil && status >= 200 && status < 300 {
+		var parsed map[string]interface{}
+		if json.Unmarshal(raw, &parsed) == nil {
+			if v, ok := parsed["like_count"]; ok {
+				result["likes"] = v
+			}
+			if v, ok := parsed["comments_count"]; ok {
+				result["comments"] = v
+			}
+		}
+	}
+
+	// Insights endpoint — requires instagram_manage_insights permission.
+	// Try progressively simpler metric sets because invalid metrics cause a 400
+	// for the entire request. profile_activity was deprecated; video_views only
+	// applies to VIDEO/REEL. We try broad → narrow so we always get reach.
+	metricSets := []string{
+		"reach,impressions,saved,video_views",
+		"reach,impressions,saved",
+		"reach,impressions",
+		"reach",
+	}
+	for _, metrics := range metricSets {
+		insightsURL := fmt.Sprintf(
+			"https://graph.facebook.com/v25.0/%s/insights?metric=%s&access_token=%s",
+			mediaID, metrics, accessToken,
+		)
+		raw, status, _, err := doJSONRequest(ctx, client, http.MethodGet, insightsURL, "", nil, nil)
+		if err != nil || status < 200 || status >= 300 {
+			continue
+		}
+		var body struct {
+			Data []struct {
+				Name   string      `json:"name"`
+				Values []struct {
+					Value interface{} `json:"value"`
+				} `json:"values"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(raw, &body) != nil {
+			continue
+		}
+		for _, metric := range body.Data {
+			if len(metric.Values) > 0 {
+				result[metric.Name] = metric.Values[0].Value
+			}
+		}
+		// Got a successful response — no need to try simpler sets.
+		break
+	}
+
+	return result
+}
+
+// fetchLinkedInInsights calls the LinkedIn Share Statistics API to get
+// impressions, clicks, likes, comments, and shares for a UGC post.
+// shareID is the provider_post_id returned at publish time (the X-RestLi-Id header).
+func fetchLinkedInInsights(ctx context.Context, client *http.Client, shareID, accessToken string) map[string]interface{} {
+	if strings.TrimSpace(shareID) == "" {
+		return nil
+	}
+	// LinkedIn share statistics endpoint for member shares.
+	statsURL := fmt.Sprintf(
+		"https://api.linkedin.com/v2/shareStatistics?q=shares&shares[0]=%s",
+		shareID,
+	)
+	raw, status, _, err := doJSONRequest(ctx, client, http.MethodGet, statsURL, accessToken, nil, map[string]string{
+		"X-Restli-Protocol-Version": "2.0.0",
+	})
+	if err != nil || status < 200 || status >= 300 {
+		return nil
+	}
+
+	var body struct {
+		Elements []struct {
+			TotalShareStatistics struct {
+				ImpressionCount   int `json:"impressionCount"`
+				ClickCount        int `json:"clickCount"`
+				LikeCount         int `json:"likeCount"`
+				CommentCount      int `json:"commentCount"`
+				ShareCount        int `json:"shareCount"`
+				UniqueImpressionsCount int `json:"uniqueImpressionsCount"`
+			} `json:"totalShareStatistics"`
+		} `json:"elements"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil || len(body.Elements) == 0 {
+		return nil
+	}
+
+	stats := body.Elements[0].TotalShareStatistics
+	result := map[string]interface{}{
+		"impressions": stats.ImpressionCount,
+		"reach":       stats.UniqueImpressionsCount,
+		"likes":       stats.LikeCount,
+		"comments":    stats.CommentCount,
+		"shares":      stats.ShareCount,
+	}
+	// If unique impressions not available, fall back to total impressions for reach.
+	if stats.UniqueImpressionsCount == 0 && stats.ImpressionCount > 0 {
+		result["reach"] = stats.ImpressionCount
+	}
+	return result
 }
 
 func (s *SocialService) requeueStaleProcessingJobs(ctx context.Context, now time.Time, staleAfter time.Duration) error {

@@ -12,6 +12,7 @@ import {
   type SocialNetwork,
 } from "@/lib/api/social";
 import {
+  AlertTriangle,
   CheckCircle,
   ChevronDown,
   Facebook,
@@ -1025,6 +1026,23 @@ export default function SocialPage() {
                       {job.payload.text?.slice(0, 140) ||
                         "Post sem preview textual"}
                     </p>
+                    {job.status === "failed" && job.error_message && (
+                      <div
+                        className="flex items-start gap-2 mt-2 rounded-xl px-3 py-2 text-xs"
+                        style={{
+                          backgroundColor: "#fde8e8",
+                          color: "#b91c1c",
+                          fontFamily: "var(--font-body)",
+                        }}
+                      >
+                        <AlertTriangle
+                          size={12}
+                          strokeWidth={2}
+                          className="mt-0.5 shrink-0"
+                        />
+                        <span>{job.error_message}</span>
+                      </div>
+                    )}
                     <div
                       className="flex flex-wrap gap-4 mt-3 text-xs"
                       style={{

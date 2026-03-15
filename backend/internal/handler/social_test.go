@@ -47,6 +47,10 @@ func (m *mockSocialService) ProcessDueJobs(ctx context.Context, now time.Time, l
 	return 0, nil
 }
 
+func (m *mockSocialService) FetchAndSaveInsights(ctx context.Context, userID string) (int, error) {
+	return 0, nil
+}
+
 func buildSocialRouter(svc handler.SocialServiceInterface) http.Handler {
 	r := chi.NewRouter()
 	r.Group(func(r chi.Router) {
