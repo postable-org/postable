@@ -8,10 +8,10 @@ import {
   MoreHorizontal,
   Plus,
   Target,
-  Twitter,
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { XLogo } from "@/components/icons/XLogo";
 
 type PlatformId = "instagram" | "linkedin" | "facebook" | "x";
 type CampaignStatus = "draft" | "active" | "paused" | "completed";
@@ -65,7 +65,7 @@ const PlatformIcon = ({
   if (id === "instagram") return <Instagram {...props} />;
   if (id === "linkedin") return <Linkedin {...props} />;
   if (id === "facebook") return <Facebook {...props} />;
-  if (id === "x") return <Twitter {...props} />;
+  if (id === "x") return <XLogo {...props} />;
   return <span style={{ fontSize: 11, fontWeight: 700, color }}>Rd</span>;
 };
 

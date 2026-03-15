@@ -15,12 +15,12 @@ import {
   PanelLeft,
   Settings,
   Share2,
-  Twitter,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "./LogoutButton";
+import { XLogo } from "@/components/icons/XLogo";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Visão Geral", Icon: LayoutDashboard },
@@ -36,7 +36,7 @@ const PLATFORMS = [
   { id: "instagram", label: "Instagram", Icon: Instagram, color: "#E1306C" },
   { id: "linkedin", label: "LinkedIn", Icon: Linkedin, color: "#0A66C2" },
   { id: "facebook", label: "Facebook", Icon: Facebook, color: "#1877F2" },
-  { id: "x", label: "X", Icon: Twitter, color: "#a0a0a0" },
+  { id: "x", label: "X", Icon: XLogo, color: "#FFFFFF" },
 ];
 
 interface SidebarProps {

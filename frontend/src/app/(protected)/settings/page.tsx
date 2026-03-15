@@ -20,10 +20,10 @@ import {
   Linkedin,
   Mail,
   Shield,
-  Twitter,
   User as UserIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { XLogo } from "@/components/icons/XLogo";
 
 const PLAN_LABELS: Record<string, string> = {
   basic: "Basic",
@@ -78,7 +78,7 @@ const SOCIAL_PLATFORMS = [
     id: "x",
     label: "X (Twitter)",
     description: "Conversas em tempo real",
-    Icon: Twitter,
+    Icon: XLogo,
     color: "#000000",
     bgColor: "#F2F2F2",
   },
