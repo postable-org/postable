@@ -63,8 +63,6 @@ export function PostCard({ post, onStatusChange, onRegenerate }: PostCardProps) 
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [insights, setInsights] = useState<PostInsights | null>(null);
   const [planLocked, setPlanLocked] = useState(false);
-  const content = post.content_json;
-
   const handleApprove = async () => {
     setLoading(true);
     try {
@@ -135,18 +133,29 @@ export function PostCard({ post, onStatusChange, onRegenerate }: PostCardProps) 
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Generated image */}
+          {post.image_url && (
+            <div className="rounded-md overflow-hidden">
+              <img
+                src={post.image_url}
+                alt="Imagem gerada para o post"
+                className="w-full object-cover max-h-64"
+              />
+            </div>
+          )}
+
           {/* Post text */}
-          <p className="text-sm whitespace-pre-wrap">{content.post_text}</p>
+          <p className="text-sm whitespace-pre-wrap">{post.post_text}</p>
 
           {/* CTA */}
-          {content.cta && (
-            <p className="text-sm font-medium text-primary">{content.cta}</p>
+          {post.cta && (
+            <p className="text-sm font-medium text-primary">{post.cta}</p>
           )}
 
           {/* Hashtags */}
-          {content.hashtags && content.hashtags.length > 0 && (
+          {post.hashtags && post.hashtags.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {content.hashtags.map((tag) => (
+              {post.hashtags.map((tag) => (
                 <span
                   key={tag}
                   className="inline-block rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
@@ -158,9 +167,9 @@ export function PostCard({ post, onStatusChange, onRegenerate }: PostCardProps) 
           )}
 
           {/* Format label */}
-          {content.suggested_format && (
+          {post.suggested_format && (
             <p className="text-xs text-muted-foreground">
-              Formato: <span className="font-medium">{content.suggested_format}</span>
+              Formato: <span className="font-medium">{post.suggested_format}</span>
             </p>
           )}
 
@@ -212,11 +221,11 @@ export function PostCard({ post, onStatusChange, onRegenerate }: PostCardProps) 
             {post.status === 'approved' && (
               <>
                 <CopyButton
-                  text={`${content.post_text}\n\n${content.cta}`}
+                  text={`${post.post_text}\n\n${post.cta}`}
                   label="Copiar Texto"
                 />
                 <CopyButton
-                  text={content.hashtags.join(' ')}
+                  text={post.hashtags.join(' ')}
                   label="Copiar Hashtags"
                 />
               </>

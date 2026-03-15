@@ -27,11 +27,13 @@ func buildGenerateRouter(genSvc handler.GenerateServiceInterface, brandSvc handl
 		r.Use(jwtauth.Verifier(testTokenAuth))
 		r.Use(jwtauth.Authenticator(testTokenAuth))
 
-		h := handler.NewGenerateHandler(genSvc, brandSvc, postSvc, &mockCompetitorSvc{})
-		r.Get("/api/generate", h.Generate)
+		h := handler.NewGenerateHandler(genSvc, brandSvc, postSvc, &mockCompetitorSvc{}, nil)
+		r.Post("/api/generate", h.Generate)
 	})
 	return r
 }
+
+const testGenerateBody = `{"business_profile":{"niche":"food","city":"Sao Paulo","state":"SP","tone":"friendly","brand_identity":"test"},"competitor_handles":[],"post_history":[],"campaign_brief":{"goal":"","target_audience":"","cta_channel":"dm","theme_hint":null}}`
 
 func TestGenerateSSE_EmitsCompetitorStageEvent(t *testing.T) {
 	python := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -47,8 +49,9 @@ func TestGenerateSSE_EmitsCompetitorStageEvent(t *testing.T) {
 	router := buildGenerateRouter(genSvc, brandSvc, postSvc)
 	token := makeTestJWT(t, "user-abc")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/generate", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/generate", strings.NewReader(testGenerateBody))
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 
@@ -71,23 +74,8 @@ func TestGenerateSSE_EmitsCompetitorStageEvent(t *testing.T) {
 func TestGenerateCompetitorGapAnalysis_PersistsToTrendContext(t *testing.T) {
 	python := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
-			"post_text":"hello",
-			"cta":"dm",
-			"hashtags":["#a"],
-			"suggested_format":"feed_post",
-			"strategic_justification":"because",
-			"tokens_used":42,
-			"competitor_gap_analysis":{
-				"selection_mode":"trend_fallback",
-				"primary_gap_theme":"weekend offers",
-				"why_now_summary":"No strong gap met quality gates.",
-				"competitors_considered":["@alpha"],
-				"key_signals":{"gap_strength":0.23,"trend_momentum":0.74,"brand_fit":0.66},
-				"confidence_band":"medium",
-				"fallback_reason":"no_strong_gap_found"
-			}
-		}`))
+		// Single-line JSON — the streaming layer splits on \n, so multi-line would break detection.
+		_, _ = w.Write([]byte(`{"post_text":"hello","cta":"dm","hashtags":["#a"],"suggested_format":"feed_post","strategic_justification":"because","tokens_used":42,"competitor_gap_analysis":{"selection_mode":"trend_fallback","primary_gap_theme":"weekend offers","why_now_summary":"No strong gap met quality gates.","competitors_considered":["@alpha"],"key_signals":{"gap_strength":0.23,"trend_momentum":0.74,"brand_fit":0.66},"confidence_band":"medium","fallback_reason":"no_strong_gap_found"}}`))
 	}))
 	defer python.Close()
 
@@ -98,27 +86,20 @@ func TestGenerateCompetitorGapAnalysis_PersistsToTrendContext(t *testing.T) {
 	router := buildGenerateRouter(genSvc, brandSvc, postSvc)
 	token := makeTestJWT(t, "user-abc")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/generate", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/generate", strings.NewReader(testGenerateBody))
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d (body: %s)", rr.Code, rr.Body.String())
 	}
-	if len(postSvc.lastCreateContent) == 0 {
+	if postSvc.lastCreateContent.PostText == "" {
 		t.Fatalf("expected generated content to be persisted")
 	}
 	if len(postSvc.lastCreateTrend) == 0 {
 		t.Fatalf("expected trend_context with competitor gap analysis to be persisted")
-	}
-
-	var content map[string]json.RawMessage
-	if err := json.Unmarshal(postSvc.lastCreateContent, &content); err != nil {
-		t.Fatalf("failed to decode persisted content JSON: %v", err)
-	}
-	if _, ok := content["competitor_gap_analysis"]; !ok {
-		t.Fatalf("expected full final payload to include competitor_gap_analysis")
 	}
 
 	var trend map[string]json.RawMessage

@@ -100,7 +100,14 @@ export default function DashboardPage() {
       user_id: "",
       brand_id: "",
       status: "pending",
-      content_json: content,
+      platform: "instagram",
+      post_text: content.post_text,
+      cta: content.cta,
+      hashtags: content.hashtags ?? [],
+      suggested_format: content.suggested_format,
+      strategic_justification: content.strategic_justification,
+      tokens_used: content.tokens_used,
+      image_url: content.image_url,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -121,7 +128,14 @@ export default function DashboardPage() {
       user_id: "",
       brand_id: "",
       status: "pending",
-      content_json: content,
+      platform: "instagram",
+      post_text: content.post_text,
+      cta: content.cta,
+      hashtags: content.hashtags ?? [],
+      suggested_format: content.suggested_format,
+      strategic_justification: content.strategic_justification,
+      tokens_used: content.tokens_used,
+      image_url: content.image_url,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -348,10 +362,10 @@ export default function DashboardPage() {
                   className="rounded-xl p-4"
                   style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
                 >
-                  {post.content_json.image_url && (
+                  {post.image_url && (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
-                      src={post.content_json.image_url}
+                      src={post.image_url}
                       alt="post"
                       className="w-full rounded-lg mb-3 object-cover"
                       style={{ aspectRatio: "1", maxHeight: "120px" }}
@@ -361,7 +375,7 @@ export default function DashboardPage() {
                     className="text-xs line-clamp-3"
                     style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
                   >
-                    {post.content_json.post_text}
+                    {post.post_text}
                   </p>
                   <div className="flex items-center gap-2 mt-3">
                     <div

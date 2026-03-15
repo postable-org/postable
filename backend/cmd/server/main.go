@@ -19,6 +19,7 @@ import (
 	"postable/internal/handler"
 	"postable/internal/middleware"
 	"postable/internal/service"
+	"postable/internal/storage"
 )
 
 // loadEnv reads KEY=VALUE pairs from path and sets them as env vars,
@@ -131,6 +132,7 @@ func main() {
 	postSvc := service.NewPostService(dbPool)
 	generateSvc := service.NewGenerateService()
 	subSvc := service.NewSubscriptionService(dbPool)
+	storageSvc := storage.NewSupabaseStorageClient()
 	socialSvc := service.NewSocialService(dbPool, nil)
 	socialOAuthSvc := service.NewSocialOAuthService(socialSvc)
 	socialSvc.SetTokenRefresher(socialOAuthSvc)
@@ -185,8 +187,8 @@ func main() {
 			r.Get("/api/posts/{id}/insights", postHandler.GetPostInsights)
 			r.Patch("/api/posts/{id}/status", postHandler.UpdateStatus)
 
-			generateHandler := handler.NewGenerateHandlerWithQuota(generateSvc, brandSvc, postSvc, competitorSvc, subSvc)
-			r.Get("/api/generate", generateHandler.Generate)
+			generateHandler := handler.NewGenerateHandlerWithQuota(generateSvc, brandSvc, postSvc, competitorSvc, subSvc, storageSvc)
+			r.Post("/api/generate", generateHandler.Generate)
 		})
 		socialHandler := handler.NewSocialHandler(socialSvc)
 		r.Get("/api/social/oauth/{network}/start", socialOAuthHandler.Start)
@@ -196,9 +198,6 @@ func main() {
 		r.Post("/api/social/publish", socialHandler.Publish)
 		r.Get("/api/social/jobs", socialHandler.ListJobs)
 		r.Post("/api/social/jobs/run-due", socialHandler.RunDueJobs)
-
-		generateHandler := handler.NewGenerateHandler(generateSvc, brandSvc, postSvc, competitorSvc)
-		r.Get("/api/generate", generateHandler.Generate)
 	})
 
 	port := os.Getenv("PORT")

@@ -1,0 +1,1 @@
+ALTER TABLE public.brands ADD COLUMN IF NOT EXISTS asset_urls TEXT[] NOT NULL DEFAULT '{}';

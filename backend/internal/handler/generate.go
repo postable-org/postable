@@ -2,15 +2,25 @@ package handler
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
+
+	"postable/internal/service"
 )
 
 // GenerateServiceInterface defines the streaming generation contract.
 // brandJSON is the pre-marshaled brand data to send to the Python agent.
 type GenerateServiceInterface interface {
 	StreamAndReturn(ctx context.Context, brandJSON string, w http.ResponseWriter) (responseJSON []byte, err error)
+}
+
+// StorageServiceInterface uploads image bytes and returns a public URL.
+type StorageServiceInterface interface {
+	UploadImage(ctx context.Context, userID string, imageBytes []byte, mimeType string) (string, error)
 }
 
 // CompetitorServiceForGenerateInterface provides competitor snapshots for the generate payload.
@@ -23,22 +33,30 @@ type QuotaChecker interface {
 	CheckQuota(ctx context.Context, userID, platform string) (allowed bool, used, limit int, err error)
 }
 
+// generateBusinessProfile mirrors the Python schema's business_profile block.
+type generateBusinessProfile struct {
+	Niche         string   `json:"niche"`
+	City          string   `json:"city"`
+	State         string   `json:"state"`
+	Tone          string   `json:"tone"`
+	BrandIdentity string   `json:"brand_identity"`
+	AssetURLs     []string `json:"asset_urls,omitempty"`
+}
+
+// generateCampaignBrief mirrors the Python schema's campaign_brief block.
+type generateCampaignBrief struct {
+	Goal           string  `json:"goal"`
+	TargetAudience string  `json:"target_audience"`
+	CTAChannel     string  `json:"cta_channel"`
+	ThemeHint      *string `json:"theme_hint"`
+}
+
 // generatePayload is the enriched payload sent to the Python agent.
 type generatePayload struct {
-	ID          string `json:"id"`
-	UserID      string `json:"user_id"`
-	Niche       string `json:"niche"`
-	City        string `json:"city"`
-	State       string `json:"state"`
-	ToneOfVoice string `json:"tone_of_voice"`
-	ToneCustom  string `json:"tone_custom,omitempty"`
-	CTAChannel  string `json:"cta_channel,omitempty"`
-	Platform    string `json:"platform,omitempty"`
-
-	CompetitorSnapshots  []json.RawMessage `json:"competitor_snapshots"`
-	LocalityBasis        string            `json:"locality_basis"`
-	LocalityStateKey     string            `json:"locality_state_key"`
-	PreviousPrimaryTheme string            `json:"previous_primary_theme,omitempty"`
+	BusinessProfile   generateBusinessProfile `json:"business_profile"`
+	CompetitorHandles []string                `json:"competitor_handles"`
+	PostHistory       []string                `json:"post_history"`
+	CampaignBrief     generateCampaignBrief   `json:"campaign_brief"`
 }
 
 var allowedPlatforms = map[string]bool{
@@ -48,26 +66,53 @@ var allowedPlatforms = map[string]bool{
 	"x":         true,
 }
 
-// GenerateHandler handles GET /api/generate SSE requests.
+// frontendBusinessProfile is the business_profile block from the frontend request body.
+type frontendBusinessProfile struct {
+	Niche         string   `json:"niche"`
+	City          string   `json:"city"`
+	State         string   `json:"state"`
+	Tone          string   `json:"tone"`
+	BrandIdentity string   `json:"brand_identity"`
+	AssetURLs     []string `json:"asset_urls,omitempty"`
+}
+
+// frontendCampaignBrief is the campaign_brief block from the frontend request body.
+type frontendCampaignBrief struct {
+	Goal           string  `json:"goal"`
+	TargetAudience string  `json:"target_audience"`
+	CTAChannel     string  `json:"cta_channel"`
+	ThemeHint      *string `json:"theme_hint"`
+}
+
+// frontendGenerateRequest is the POST body sent by the frontend.
+type frontendGenerateRequest struct {
+	BusinessProfile   frontendBusinessProfile `json:"business_profile"`
+	CompetitorHandles []string                `json:"competitor_handles"`
+	PostHistory       []string                `json:"post_history"`
+	CampaignBrief     frontendCampaignBrief   `json:"campaign_brief"`
+}
+
+// GenerateHandler handles POST /api/generate SSE requests.
 type GenerateHandler struct {
 	svc           GenerateServiceInterface
 	brandSvc      BrandServiceInterface
 	postSvc       PostServiceInterface
 	competitorSvc CompetitorServiceForGenerateInterface
 	subSvc        QuotaChecker
+	storageSvc    StorageServiceInterface
 }
 
 // NewGenerateHandler creates a new GenerateHandler.
-func NewGenerateHandler(svc GenerateServiceInterface, brandSvc BrandServiceInterface, postSvc PostServiceInterface, competitorSvc CompetitorServiceForGenerateInterface) *GenerateHandler {
-	return &GenerateHandler{svc: svc, brandSvc: brandSvc, postSvc: postSvc, competitorSvc: competitorSvc}
+func NewGenerateHandler(svc GenerateServiceInterface, brandSvc BrandServiceInterface, postSvc PostServiceInterface, competitorSvc CompetitorServiceForGenerateInterface, storageSvc StorageServiceInterface) *GenerateHandler {
+	return &GenerateHandler{svc: svc, brandSvc: brandSvc, postSvc: postSvc, competitorSvc: competitorSvc, storageSvc: storageSvc}
 }
 
 // NewGenerateHandlerWithQuota creates a GenerateHandler with quota checking.
-func NewGenerateHandlerWithQuota(svc GenerateServiceInterface, brandSvc BrandServiceInterface, postSvc PostServiceInterface, competitorSvc CompetitorServiceForGenerateInterface, subSvc QuotaChecker) *GenerateHandler {
-	return &GenerateHandler{svc: svc, brandSvc: brandSvc, postSvc: postSvc, competitorSvc: competitorSvc, subSvc: subSvc}
+func NewGenerateHandlerWithQuota(svc GenerateServiceInterface, brandSvc BrandServiceInterface, postSvc PostServiceInterface, competitorSvc CompetitorServiceForGenerateInterface, subSvc QuotaChecker, storageSvc StorageServiceInterface) *GenerateHandler {
+	return &GenerateHandler{svc: svc, brandSvc: brandSvc, postSvc: postSvc, competitorSvc: competitorSvc, subSvc: subSvc, storageSvc: storageSvc}
 }
 
-// Generate handles GET /api/generate — streams SSE generation events.
+// Generate handles POST /api/generate — streams SSE generation events.
 func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	userID, ok := getUserID(r)
 	if !ok {
@@ -76,15 +121,14 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read and validate platform param
-	platform := r.URL.Query().Get("platform")
-	if platform == "" {
-		platform = "instagram"
-	}
-	if !allowedPlatforms[platform] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid platform"})
+	// Decode POST body
+	var req frontendGenerateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
+
+	platform := "instagram"
 
 	// Quota check
 	if h.subSvc != nil {
@@ -93,7 +137,6 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 			slog.Warn("generate: quota check failed", "userID", userID, "error", err)
 			// On quota check failure, fall through (don't block generation)
 		} else if !allowed {
-			// Find period end from subscription context (best-effort)
 			writeJSON(w, http.StatusTooManyRequests, map[string]any{
 				"error":    "quota_exceeded",
 				"used":     used,
@@ -111,19 +154,6 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch competitor snapshots for gap analysis.
-	var snapshots []json.RawMessage
-	if h.competitorSvc != nil {
-		snapshots, err = h.competitorSvc.ActiveSnapshotsForGenerate(r.Context(), userID, brand.ID)
-		if err != nil {
-			slog.Warn("generate: failed to fetch competitor snapshots", "userID", userID, "error", err)
-			snapshots = []json.RawMessage{}
-		}
-	}
-	if snapshots == nil {
-		snapshots = []json.RawMessage{}
-	}
-
 	// Fetch previous primary theme for soft rotation.
 	var prevTheme string
 	if h.postSvc != nil {
@@ -134,20 +164,28 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	themeHint := req.CampaignBrief.ThemeHint
+	if themeHint == nil && prevTheme != "" {
+		themeHint = &prevTheme
+	}
+
 	payload := generatePayload{
-		ID:                   brand.ID,
-		UserID:               userID,
-		Niche:                brand.Niche,
-		City:                 brand.City,
-		State:                brand.State,
-		ToneOfVoice:          brand.ToneOfVoice,
-		ToneCustom:           brand.ToneCustom,
-		CTAChannel:           brand.CTAChannel,
-		Platform:             platform,
-		CompetitorSnapshots:  snapshots,
-		LocalityBasis:        "state",
-		LocalityStateKey:     brand.State,
-		PreviousPrimaryTheme: prevTheme,
+		BusinessProfile: generateBusinessProfile{
+			Niche:         req.BusinessProfile.Niche,
+			City:          req.BusinessProfile.City,
+			State:         req.BusinessProfile.State,
+			Tone:          req.BusinessProfile.Tone,
+			BrandIdentity: req.BusinessProfile.BrandIdentity,
+			AssetURLs:     req.BusinessProfile.AssetURLs,
+		},
+		CompetitorHandles: req.CompetitorHandles,
+		PostHistory:       req.PostHistory,
+		CampaignBrief: generateCampaignBrief{
+			Goal:           req.CampaignBrief.Goal,
+			TargetAudience: req.CampaignBrief.TargetAudience,
+			CTAChannel:     req.CampaignBrief.CTAChannel,
+			ThemeHint:      themeHint,
+		},
 	}
 
 	brandJSON, err := json.Marshal(payload)
@@ -164,19 +202,109 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if responseJSON != nil && h.postSvc != nil {
-		trendContextJSON := extractTrendContextFromGenerateResponse(responseJSON)
+	// Use a background context for post-stream operations so they aren't cancelled
+	// if the HTTP request context is already done.
+	saveCtx := context.Background()
 
-		// Save the generated post to DB. Use a background context so DB write
-		// isn't cancelled if the HTTP request context is already done.
-		saveCtx := context.Background()
-		_, saveErr := h.postSvc.Create(saveCtx, userID, brand.ID, responseJSON, trendContextJSON, platform)
-		if saveErr != nil {
-			slog.Error("generate: failed to save post", "userID", userID, "error", saveErr)
+	// Process image: upload base64 to Supabase Storage and replace with public URL.
+	finalJSON := responseJSON
+	if responseJSON != nil && h.storageSvc != nil {
+		processed, _, err := processAgentImage(saveCtx, responseJSON, h.storageSvc, userID)
+		if err != nil {
+			slog.Warn("generate: image processing failed, using original response", "userID", userID, "error", err)
 		} else {
-			slog.Info("generate: post saved", "userID", userID, "platform", platform)
+			finalJSON = processed
 		}
 	}
+
+	// Send the done event with the (processed) final content. StreamAndReturn no longer
+	// emits done, so the handler is responsible for sending it here.
+	if flusher, ok := w.(http.Flusher); ok {
+		if finalJSON != nil {
+			fmt.Fprintf(w, "event: done\ndata: %s\n\n", finalJSON)
+		} else {
+			fmt.Fprintf(w, "event: done\ndata: null\n\n")
+		}
+		flusher.Flush()
+	}
+
+	if finalJSON != nil && h.postSvc != nil {
+		trendContextJSON := extractTrendContextFromGenerateResponse(finalJSON)
+		content, parseErr := parsePostContent(finalJSON)
+		if parseErr != nil {
+			slog.Warn("generate: failed to parse post content, skipping save", "userID", userID, "error", parseErr)
+		} else {
+			_, saveErr := h.postSvc.Create(saveCtx, userID, brand.ID, content, trendContextJSON, platform)
+			if saveErr != nil {
+				slog.Error("generate: failed to save post", "userID", userID, "error", saveErr)
+			} else {
+				slog.Info("generate: post saved", "userID", userID, "platform", platform)
+			}
+		}
+	}
+}
+
+// processAgentImage detects image_base64 in responseJSON, uploads it to storage,
+// and returns mutated JSON with image_url injected and base64 fields removed.
+// If no image_base64 is present, returns responseJSON unchanged.
+func processAgentImage(ctx context.Context, responseJSON []byte, storageSvc StorageServiceInterface, userID string) ([]byte, string, error) {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(responseJSON, &payload); err != nil {
+		return responseJSON, "", nil
+	}
+
+	imageBase64Raw, hasBase64 := payload["image_base64"]
+	if !hasBase64 || len(imageBase64Raw) == 0 || string(imageBase64Raw) == "null" {
+		return responseJSON, "", nil
+	}
+
+	var imageBase64 string
+	if err := json.Unmarshal(imageBase64Raw, &imageBase64); err != nil || imageBase64 == "" {
+		return responseJSON, "", nil
+	}
+
+	mimeType := "image/jpeg"
+	if mimeRaw, ok := payload["image_mime_type"]; ok {
+		var mt string
+		if err := json.Unmarshal(mimeRaw, &mt); err == nil && mt != "" {
+			mimeType = mt
+		}
+	}
+
+	// Strip whitespace/newlines — some encoders (e.g. Python's base64 module) wrap at 76 chars.
+	imageBase64 = strings.ReplaceAll(imageBase64, "\n", "")
+	imageBase64 = strings.ReplaceAll(imageBase64, "\r", "")
+	imageBase64 = strings.ReplaceAll(imageBase64, " ", "")
+
+	imageBytes, err := base64.StdEncoding.DecodeString(imageBase64)
+	if err != nil {
+		return responseJSON, "", fmt.Errorf("decode image_base64: %w", err)
+	}
+
+	imageURL, err := storageSvc.UploadImage(ctx, userID, imageBytes, mimeType)
+	if err != nil {
+		return responseJSON, "", fmt.Errorf("upload image: %w", err)
+	}
+
+	delete(payload, "image_base64")
+	delete(payload, "image_mime_type")
+	imageURLJSON, _ := json.Marshal(imageURL)
+	payload["image_url"] = imageURLJSON
+
+	processed, err := json.Marshal(payload)
+	if err != nil {
+		return responseJSON, imageURL, fmt.Errorf("re-marshal payload: %w", err)
+	}
+	return processed, imageURL, nil
+}
+
+// parsePostContent unmarshals the agent response JSON into a PostContent struct.
+func parsePostContent(data []byte) (service.PostContent, error) {
+	var c service.PostContent
+	if err := json.Unmarshal(data, &c); err != nil {
+		return service.PostContent{}, fmt.Errorf("parse post content: %w", err)
+	}
+	return c, nil
 }
 
 func extractTrendContextFromGenerateResponse(responseJSON []byte) []byte {
@@ -189,9 +317,13 @@ func extractTrendContextFromGenerateResponse(responseJSON []byte) []byte {
 		return nil
 	}
 
+	// Try both field names: the agent may send "gap_analysis" or "competitor_gap_analysis".
 	analysis, ok := payload["competitor_gap_analysis"]
 	if !ok || len(analysis) == 0 || string(analysis) == "null" {
-		return nil
+		analysis, ok = payload["gap_analysis"]
+		if !ok || len(analysis) == 0 || string(analysis) == "null" {
+			return nil
+		}
 	}
 
 	trendContext, err := json.Marshal(map[string]json.RawMessage{

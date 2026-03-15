@@ -18,29 +18,36 @@ import (
 )
 
 type mockPostService struct {
-	lastCreateContent json.RawMessage
+	lastCreateContent service.PostContent
 	lastCreateTrend   json.RawMessage
 	byID              map[string]*service.Post
 	createdID         string
 }
 
-func (m *mockPostService) Create(ctx context.Context, userID, brandID string, contentJSON, trendContext []byte, platform string) (*service.Post, error) {
-	m.lastCreateContent = append([]byte(nil), contentJSON...)
+func (m *mockPostService) Create(ctx context.Context, userID, brandID string, content service.PostContent, trendContext []byte, platform string) (*service.Post, error) {
+	m.lastCreateContent = content
 	m.lastCreateTrend = append([]byte(nil), trendContext...)
 	id := m.createdID
 	if id == "" {
 		id = "created-post"
 	}
 	return &service.Post{
-		ID:           id,
-		UserID:       userID,
-		BrandID:      brandID,
-		Status:       "pending",
-		Platform:     platform,
-		ContentJSON:  append([]byte(nil), contentJSON...),
-		TrendContext: append([]byte(nil), trendContext...),
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:                     id,
+		UserID:                 userID,
+		BrandID:                brandID,
+		Status:                 "pending",
+		Platform:               platform,
+		PostText:               content.PostText,
+		CTA:                    content.CTA,
+		Hashtags:               content.Hashtags,
+		SuggestedFormat:        content.SuggestedFormat,
+		StrategicJustification: content.StrategicJustification,
+		TokensUsed:             content.TokensUsed,
+		ImageURL:               content.ImageURL,
+		ImagePrompt:            content.ImagePrompt,
+		TrendContext:           append([]byte(nil), trendContext...),
+		CreatedAt:              time.Now(),
+		UpdatedAt:              time.Now(),
 	}, nil
 }
 
@@ -50,7 +57,6 @@ func (m *mockPostService) GetByID(ctx context.Context, id, userID string) (*serv
 		return nil, service.ErrPostNotFound
 	}
 	clone := *post
-	clone.ContentJSON = append([]byte(nil), post.ContentJSON...)
 	clone.TrendContext = append([]byte(nil), post.TrendContext...)
 	return &clone, nil
 }
@@ -60,7 +66,6 @@ func (m *mockPostService) ListByUserID(ctx context.Context, userID string) ([]se
 	for _, post := range m.byID {
 		if post.UserID == userID {
 			clone := *post
-			clone.ContentJSON = append([]byte(nil), post.ContentJSON...)
 			clone.TrendContext = append([]byte(nil), post.TrendContext...)
 			out = append(out, clone)
 		}
@@ -83,7 +88,6 @@ func (m *mockPostService) UpdateStatus(ctx context.Context, id, userID, status s
 	post.Status = status
 	post.UpdatedAt = time.Now()
 	clone := *post
-	clone.ContentJSON = append([]byte(nil), post.ContentJSON...)
 	clone.TrendContext = append([]byte(nil), post.TrendContext...)
 	return &clone, nil
 }
@@ -246,18 +250,18 @@ func TestPostListAndUpdateStatus_Regression(t *testing.T) {
 	svc := &mockPostService{
 		byID: map[string]*service.Post{
 			"post-1": {
-				ID:          "post-1",
-				UserID:      "user-abc",
-				BrandID:     "brand-1",
-				Status:      "pending",
-				ContentJSON: json.RawMessage(`{"post_text":"hello"}`),
+				ID:       "post-1",
+				UserID:   "user-abc",
+				BrandID:  "brand-1",
+				Status:   "pending",
+				PostText: "hello",
 			},
 			"post-2": {
-				ID:          "post-2",
-				UserID:      "user-other",
-				BrandID:     "brand-2",
-				Status:      "pending",
-				ContentJSON: json.RawMessage(`{"post_text":"hidden"}`),
+				ID:       "post-2",
+				UserID:   "user-other",
+				BrandID:  "brand-2",
+				Status:   "pending",
+				PostText: "hidden",
 			},
 		},
 	}

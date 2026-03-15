@@ -798,7 +798,7 @@ export default function SocialPage() {
                 <option value="">Selecione um post gerado</option>
                 {posts.map((post) => (
                   <option key={post.id} value={post.id}>
-                    {post.content_json.post_text?.slice(0, 80) ?? post.id}
+                    {post.post_text?.slice(0, 80) ?? post.id}
                   </option>
                 ))}
               </select>

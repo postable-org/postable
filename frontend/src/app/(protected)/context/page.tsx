@@ -17,30 +17,32 @@ import {
   Loader2,
 } from "lucide-react";
 import { getBrand, updateBrand, type BrandData } from "@/lib/api/brands";
-import { getCompetitors, updateCompetitors } from "@/lib/api/competitors";
+import { getCompetitors, updateCompetitors, type CompetitorOperation } from "@/lib/api/competitors";
 
 // ── Media Upload ─────────────────────────────────────────────────────────────
 
-interface MediaFile {
-  id: string;
-  file: File;
-  preview?: string;
-  type: "image" | "video" | "document";
+type AssetType = "image" | "video" | "document";
+
+function getURLType(url: string): AssetType {
+  const lower = url.toLowerCase().split("?")[0];
+  if (/\.(jpg|jpeg|png|gif|webp|avif|svg)$/.test(lower)) return "image";
+  if (/\.(mp4|mov|webm|avi|mkv)$/.test(lower)) return "video";
+  return "document";
 }
 
-function getFileType(file: File): MediaFile["type"] {
+function getFileType(file: File): AssetType {
   if (file.type.startsWith("image/")) return "image";
   if (file.type.startsWith("video/")) return "video";
   return "document";
 }
 
-function MediaIcon({ type }: { type: MediaFile["type"] }) {
+function MediaIcon({ type }: { type: AssetType }) {
   if (type === "image") return <ImageIcon size={20} style={{ color: "#8c8880" }} />;
   if (type === "video") return <FileVideo size={20} style={{ color: "#8c8880" }} />;
   return <FileText size={20} style={{ color: "#8c8880" }} />;
 }
 
-function DropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
+function DropZone({ onFiles, disabled }: { onFiles: (files: File[]) => void; disabled?: boolean }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -48,22 +50,25 @@ function DropZone({ onFiles }: { onFiles: (files: File[]) => void }) {
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragging(false);
+      if (disabled) return;
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) onFiles(files);
     },
-    [onFiles]
+    [onFiles, disabled]
   );
 
   return (
     <div
       onDrop={handleDrop}
-      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragging(true); }}
       onDragLeave={() => setDragging(false)}
-      onClick={() => inputRef.current?.click()}
-      className="rounded-2xl border-2 border-dashed p-10 text-center cursor-pointer transition-all"
+      onClick={() => !disabled && inputRef.current?.click()}
+      className="rounded-2xl border-2 border-dashed p-10 text-center transition-all"
       style={{
         borderColor: dragging ? "#0a0a0a" : "#e4e0d8",
         backgroundColor: dragging ? "rgba(10,10,10,0.02)" : "#ffffff",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.6 : 1,
       }}
     >
       <input
@@ -226,11 +231,17 @@ const inputStyle = {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ContextPage() {
-  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
+  const [assetURLs, setAssetURLs] = useState<string[]>([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [competitors, setCompetitors] = useState<string[]>([]);
   const [competitorInput, setCompetitorInput] = useState("");
   const [competitorLoading, setCompetitorLoading] = useState(false);
+
+  // Track competitors as loaded from DB for computing diffs on save
+  const loadedCompetitorsRef = useRef<string[]>([]);
 
   // Brand / company info
   const [brandLoading, setBrandLoading] = useState(true);
@@ -248,20 +259,8 @@ export default function ContextPage() {
   });
 
   useEffect(() => {
-    getCompetitors()
-      .then((res) => {
-        setCompetitors(
-          res.competitors
-            .filter((c) => c.status === "active")
-            .map((c) => c.handle)
-        );
-      })
-      .catch(() => {/* silently ignore — competitors are non-critical */});
-  }, []);
-
-  useEffect(() => {
-    getBrand()
-      .then((brand) => {
+    Promise.all([getBrand(), getCompetitors()])
+      .then(([brand, competitorRes]) => {
         if (brand) {
           setBrandForm({
             name: brand.name ?? "",
@@ -273,34 +272,47 @@ export default function ContextPage() {
             cta_channel: brand.cta_channel as BrandData["cta_channel"],
             context_json: brand.context_json,
           });
-          // Load saved context answers
           if (brand.context_json) {
             try {
               const saved = JSON.parse(brand.context_json) as Record<string, string>;
               setAnswers(saved);
             } catch { /* ignore */ }
           }
+          if (brand.asset_urls && brand.asset_urls.length > 0) {
+            setAssetURLs(brand.asset_urls);
+          }
         }
+        const handles = competitorRes.competitors.map((c) => c.handle);
+        setCompetitors(handles);
+        loadedCompetitorsRef.current = handles;
       })
       .catch(() => setBrandError("Falha ao carregar dados da empresa."))
       .finally(() => setBrandLoading(false));
   }, []);
 
-  const handleFiles = useCallback((files: File[]) => {
-    const newFiles: MediaFile[] = files.map((file) => {
-      const type = getFileType(file);
-      const preview = type === "image" ? URL.createObjectURL(file) : undefined;
-      return { id: `${Date.now()}-${Math.random()}`, file, preview, type };
-    });
-    setMediaFiles((prev) => [...prev, ...newFiles]);
+  const handleFiles = useCallback(async (files: File[]) => {
+    setUploadingFile(true);
+    setUploadError(null);
+    try {
+      const uploaded: string[] = [];
+      for (const file of files) {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/api/upload", { method: "POST", body: form });
+        if (!res.ok) throw new Error("upload failed");
+        const json = await res.json() as { url: string };
+        uploaded.push(json.url);
+      }
+      setAssetURLs((prev) => [...prev, ...uploaded]);
+    } catch {
+      setUploadError("Falha ao enviar arquivo. Tente novamente.");
+    } finally {
+      setUploadingFile(false);
+    }
   }, []);
 
-  const removeFile = (id: string) => {
-    setMediaFiles((prev) => {
-      const f = prev.find((m) => m.id === id);
-      if (f?.preview) URL.revokeObjectURL(f.preview);
-      return prev.filter((m) => m.id !== id);
-    });
+  const removeAsset = (url: string) => {
+    setAssetURLs((prev) => prev.filter((u) => u !== url));
   };
 
   const addCompetitor = async () => {
@@ -343,10 +355,29 @@ export default function ContextPage() {
     setBrandSaving(true);
     setBrandError(null);
     try {
+      // Save brand (including asset_urls)
       await updateBrand({
         ...brandForm,
         context_json: Object.keys(answers).length > 0 ? JSON.stringify(answers) : undefined,
+        asset_urls: assetURLs,
       });
+
+      // Compute competitor diff and apply
+      const loaded = loadedCompetitorsRef.current;
+      const ops: CompetitorOperation[] = [];
+      for (const h of competitors) {
+        if (!loaded.includes(h)) ops.push({ type: "add", handle: h });
+      }
+      for (const h of loaded) {
+        if (!competitors.includes(h)) ops.push({ type: "remove", handle: h });
+      }
+      if (ops.length > 0) {
+        const res = await updateCompetitors(ops);
+        const newHandles = res.competitors.map((c) => c.handle);
+        setCompetitors(newHandles);
+        loadedCompetitorsRef.current = newHandles;
+      }
+
       setBrandSaved(true);
       setTimeout(() => setBrandSaved(false), 3000);
     } catch {
@@ -552,42 +583,60 @@ export default function ContextPage() {
         icon={ImageIcon}
         defaultOpen={false}
       >
-        <DropZone onFiles={handleFiles} />
+        <DropZone onFiles={handleFiles} disabled={uploadingFile} />
 
-        {mediaFiles.length > 0 && (
+        {uploadingFile && (
+          <div className="flex items-center gap-2 text-sm mt-3" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+            <Loader2 size={14} className="animate-spin" /> Enviando arquivo...
+          </div>
+        )}
+
+        {uploadError && (
+          <div
+            className="rounded-xl px-4 py-3 text-sm mt-3"
+            style={{ backgroundColor: "#fde8e8", color: "#b91c1c", fontFamily: "var(--font-body)" }}
+          >
+            {uploadError}
+          </div>
+        )}
+
+        {assetURLs.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
-            {mediaFiles.map((mf) => (
-              <div
-                key={mf.id}
-                className="relative rounded-xl overflow-hidden"
-                style={{ border: "1px solid #e4e0d8", aspectRatio: "1" }}
-              >
-                {mf.preview ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={mf.preview} alt={mf.file.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div
-                    className="w-full h-full flex flex-col items-center justify-center gap-2"
-                    style={{ backgroundColor: "#f0ede7" }}
-                  >
-                    <MediaIcon type={mf.type} />
-                    <p
-                      className="text-xs px-2 text-center truncate w-full"
-                      style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-                    >
-                      {mf.file.name}
-                    </p>
-                  </div>
-                )}
-                <button
-                  onClick={() => removeFile(mf.id)}
-                  className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: "rgba(10,10,10,0.7)" }}
+            {assetURLs.map((url) => {
+              const type = getURLType(url);
+              return (
+                <div
+                  key={url}
+                  className="relative rounded-xl overflow-hidden"
+                  style={{ border: "1px solid #e4e0d8", aspectRatio: "1" }}
                 >
-                  <X size={12} style={{ color: "#f8f5ef" }} />
-                </button>
-              </div>
-            ))}
+                  {type === "image" ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={url} alt="asset" className="w-full h-full object-cover" />
+                  ) : (
+                    <div
+                      className="w-full h-full flex flex-col items-center justify-center gap-2"
+                      style={{ backgroundColor: "#f0ede7" }}
+                    >
+                      <MediaIcon type={type} />
+                      <p
+                        className="text-xs px-2 text-center truncate w-full"
+                        style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+                      >
+                        {url.split("/").pop()?.split("?")[0] ?? "arquivo"}
+                      </p>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeAsset(url)}
+                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: "rgba(10,10,10,0.7)" }}
+                  >
+                    <X size={12} style={{ color: "#f8f5ef" }} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </Section>

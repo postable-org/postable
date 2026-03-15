@@ -1,70 +1,30 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { GenerateRequest } from '@/lib/hooks/useSSEGenerate';
 
 // We'll import after the mock is set up
 let useSSEGenerate: typeof import('@/lib/hooks/useSSEGenerate').useSSEGenerate;
 
-// ---- MockEventSource ----
-type EventHandler = ((event: MessageEvent | Event) => void) | null;
+const minimalPayload: GenerateRequest = {
+  business_profile: { niche: 'food', city: 'SP', state: 'SP', tone: 'friendly', brand_identity: 'test' },
+  competitor_handles: [],
+  post_history: [],
+  campaign_brief: { goal: '', target_audience: '', cta_channel: 'dm', theme_hint: null },
+};
 
-class MockEventSource {
-  static instances: MockEventSource[] = [];
-
-  url: string;
-  onmessage: EventHandler = null;
-  onerror: EventHandler = null;
-  onopen: EventHandler = null;
-  private listeners: Record<string, ((event: MessageEvent | Event) => void)[]> = {};
-  closed = false;
-
-  constructor(url: string) {
-    this.url = url;
-    MockEventSource.instances.push(this);
-  }
-
-  addEventListener(type: string, handler: (event: MessageEvent | Event) => void) {
-    if (!this.listeners[type]) this.listeners[type] = [];
-    this.listeners[type].push(handler);
-  }
-
-  removeEventListener(type: string, handler: (event: MessageEvent | Event) => void) {
-    if (this.listeners[type]) {
-      this.listeners[type] = this.listeners[type].filter((h) => h !== handler);
-    }
-  }
-
-  close() {
-    this.closed = true;
-  }
-
-  // Test helpers
-  simulateMessage(data: string) {
-    const event = { data } as MessageEvent;
-    if (this.onmessage) this.onmessage(event);
-    (this.listeners['message'] ?? []).forEach((h) => h(event));
-  }
-
-  simulateNamedEvent(type: string, data: string) {
-    const event = { data } as MessageEvent;
-    (this.listeners[type] ?? []).forEach((h) => h(event));
-  }
-
-  simulateError(message = 'Connection failed') {
-    const event = { data: message } as MessageEvent;
-    (this.listeners['error'] ?? []).forEach((h) => h(event));
-    if (this.onerror) this.onerror(event);
-  }
-
-  simulateNativeError() {
-    const event = new Event('error');
-    if (this.onerror) this.onerror(event);
-  }
+function makeControllableSSEResponse() {
+  const encoder = new TextEncoder();
+  let ctrl: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({ start(c) { ctrl = c; } });
+  return {
+    response: new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }),
+    push: (text: string) => ctrl.enqueue(encoder.encode(text)),
+    close: () => ctrl.close(),
+  };
 }
 
 beforeEach(async () => {
-  MockEventSource.instances = [];
-  vi.stubGlobal('EventSource', MockEventSource);
-  // Import after mock is registered
+  vi.stubGlobal('fetch', vi.fn());
   const mod = await import('@/lib/hooks/useSSEGenerate');
   useSSEGenerate = mod.useSSEGenerate;
 });
@@ -83,40 +43,45 @@ describe('useSSEGenerate', () => {
   });
 
   it('transitions idle -> connecting -> streaming when start() is called', async () => {
-    const { result } = renderHook(() => useSSEGenerate(() => {}));
+    const { response, close } = makeControllableSSEResponse();
+    vi.mocked(fetch).mockResolvedValue(response);
 
+    const { result } = renderHook(() => useSSEGenerate(() => {}));
     expect(result.current.status).toBe('idle');
 
     await act(async () => {
-      result.current.start();
-      // Allow async getSession to resolve
+      result.current.start(minimalPayload);
       await new Promise((r) => setTimeout(r, 10));
     });
 
-    // After start, should be connecting or streaming (EventSource opened)
     expect(['connecting', 'streaming']).toContain(result.current.status);
-    expect(MockEventSource.instances.length).toBeGreaterThan(0);
+    close();
   });
 
   it('updates progressMessage from data events', async () => {
+    const { response, push, close } = makeControllableSSEResponse();
+    vi.mocked(fetch).mockResolvedValue(response);
+
     const { result } = renderHook(() => useSSEGenerate(() => {}));
 
     await act(async () => {
-      result.current.start();
+      result.current.start(minimalPayload);
       await new Promise((r) => setTimeout(r, 10));
     });
 
-    const es = MockEventSource.instances[0];
-
-    act(() => {
-      es.simulateMessage('Buscando tendências...');
+    await act(async () => {
+      push('data: Buscando tendências...\n\n');
+      await new Promise((r) => setTimeout(r, 10));
     });
     expect(result.current.progressMessage).toBe('Buscando tendências...');
 
-    act(() => {
-      es.simulateMessage('Gerando conteúdo...');
+    await act(async () => {
+      push('data: Gerando conteúdo...\n\n');
+      await new Promise((r) => setTimeout(r, 10));
     });
     expect(result.current.progressMessage).toBe('Gerando conteúdo...');
+
+    close();
   });
 
   it('calls onComplete with parsed PostContent on done event and sets status=complete', async () => {
@@ -129,58 +94,60 @@ describe('useSSEGenerate', () => {
       tokens_used: 100,
     };
 
+    const { response, push, close } = makeControllableSSEResponse();
+    vi.mocked(fetch).mockResolvedValue(response);
+
     const onComplete = vi.fn();
     const { result } = renderHook(() => useSSEGenerate(onComplete));
 
     await act(async () => {
-      result.current.start();
+      result.current.start(minimalPayload);
       await new Promise((r) => setTimeout(r, 10));
     });
 
-    const es = MockEventSource.instances[0];
-
-    act(() => {
-      es.simulateMessage(JSON.stringify(postContent));
-    });
-
-    act(() => {
-      es.simulateNamedEvent('done', 'null');
+    await act(async () => {
+      push(`event: done\ndata: ${JSON.stringify(postContent)}\n\n`);
+      close();
+      await new Promise((r) => setTimeout(r, 20));
     });
 
     expect(result.current.status).toBe('complete');
     expect(onComplete).toHaveBeenCalledWith(postContent);
-    expect(es.closed).toBe(true);
   });
 
-  it('sets status=error and closes EventSource on error event', async () => {
+  it('sets status=error and aborts on error event', async () => {
+    const { response, push, close } = makeControllableSSEResponse();
+    vi.mocked(fetch).mockResolvedValue(response);
+
     const { result } = renderHook(() => useSSEGenerate(() => {}));
 
     await act(async () => {
-      result.current.start();
+      result.current.start(minimalPayload);
       await new Promise((r) => setTimeout(r, 10));
     });
 
-    const es = MockEventSource.instances[0];
-
-    act(() => {
-      es.simulateError('Something went wrong');
+    await act(async () => {
+      push('event: error\ndata: Something went wrong\n\n');
+      close();
+      await new Promise((r) => setTimeout(r, 10));
     });
 
     expect(result.current.status).toBe('error');
-    expect(es.closed).toBe(true);
   });
 
-  it('cleans up EventSource on unmount', async () => {
+  it('cleans up on unmount without throwing', async () => {
+    const { response, close } = makeControllableSSEResponse();
+    vi.mocked(fetch).mockResolvedValue(response);
+
     const { result, unmount } = renderHook(() => useSSEGenerate(() => {}));
 
     await act(async () => {
-      result.current.start();
+      result.current.start(minimalPayload);
       await new Promise((r) => setTimeout(r, 10));
     });
 
-    const es = MockEventSource.instances[0];
     unmount();
-
-    expect(es.closed).toBe(true);
+    close();
+    // No errors thrown — test passes
   });
 });

@@ -90,7 +90,12 @@ function ActionBtn({
 export function PostReview({ content, onSave, onPublish, onCancel }: PostReviewProps) {
   const [caption, setCaption] = useState(content.post_text);
   const [hashtags, setHashtags] = useState<string[]>(content.hashtags ?? []);
-  const [imageUrl, setImageUrl] = useState<string | null>(content.image_url ?? null);
+  // Prefer image_url from storage; fall back to data URL if backend upload failed
+  const derivedImageUrl = content.image_url
+    ?? (content.image_base64 && content.image_mime_type
+        ? `data:${content.image_mime_type};base64,${content.image_base64}`
+        : null);
+  const [imageUrl, setImageUrl] = useState<string | null>(derivedImageUrl);
   const [imageRemoved, setImageRemoved] = useState(false);
   const [extraMedia, setExtraMedia] = useState<ExtraMedia[]>([]);
   const [extraFiles, setExtraFiles] = useState<File[]>([]);
@@ -141,12 +146,12 @@ export function PostReview({ content, onSave, onPublish, onCancel }: PostReviewP
     setEditingTag("");
   };
 
-  const buildFinalContent = (): PostContent => ({
-    ...content,
-    post_text: caption,
-    hashtags,
-    image_url: imageRemoved ? undefined : imageUrl ?? undefined,
-  });
+  const buildFinalContent = (): PostContent => {
+    // Exclude raw base64 fields from the saved payload — image_url is the canonical reference
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { image_base64, image_mime_type, ...rest } = content;
+    return { ...rest, post_text: caption, hashtags, image_url: imageRemoved ? undefined : imageUrl ?? undefined };
+  };
 
   return (
     <div

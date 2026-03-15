@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -28,7 +29,7 @@ func NewGenerateService() *GenerateService {
 	}
 	return &GenerateService{
 		pythonAgentURL: url,
-		httpClient:     &http.Client{Timeout: 70 * time.Second},
+		httpClient:     &http.Client{Timeout: 6 * time.Minute},
 	}
 }
 
@@ -63,7 +64,7 @@ func (s *GenerateService) StreamAndReturn(ctx context.Context, brandJSON string,
 	go func() {
 		defer close(messageChan)
 
-		agentCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		agentCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
 
 		body, err := s.callPythonAgent(agentCtx, brandJSON)
@@ -82,9 +83,10 @@ func (s *GenerateService) StreamAndReturn(ctx context.Context, brandJSON string,
 				lines := strings.Split(chunk, "\n")
 				for i, line := range lines {
 					if i < len(lines)-1 {
-						if line != "" {
-							messageChan <- line
+						if strings.HasPrefix(line, "data: ") {
+							messageChan <- strings.TrimPrefix(line, "data: ")
 						}
+						// Skip event:, comment (:), and blank lines from Python SSE
 					} else {
 						partial = line
 					}
@@ -102,7 +104,10 @@ func (s *GenerateService) StreamAndReturn(ctx context.Context, brandJSON string,
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
-	var fullDataPayload strings.Builder
+	// finalPayload holds the last JSON line that contains post_text (the agent's final response).
+	// It is buffered here and NOT forwarded to the client — the handler sends it as the done event
+	// after processing (e.g. uploading base64 images to storage).
+	var finalPayload []byte
 
 	for {
 		select {
@@ -117,25 +122,33 @@ func (s *GenerateService) StreamAndReturn(ctx context.Context, brandJSON string,
 		case line, open := <-messageChan:
 			if !open {
 				fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"content-generation\",\"status\":\"complete\"}\n\n")
-				fmt.Fprintf(w, "event: done\ndata: null\n\n")
 				flusher.Flush()
-				payload := strings.TrimSpace(fullDataPayload.String())
-				if payload != "" {
-					return []byte(payload), nil
-				}
-				return nil, nil
+				return finalPayload, nil
 			}
-			if fullDataPayload.Len() > 0 {
-				fullDataPayload.WriteByte('\n')
+			// Detect the final response payload by checking for the post_text key.
+			// Buffer it without forwarding — the handler will process and send it as the done event.
+			if isFinalPayloadLine(line) {
+				finalPayload = []byte(strings.TrimSpace(line))
+			} else {
+				fmt.Fprintf(w, "data: %s\n\n", line)
+				flusher.Flush()
 			}
-			fullDataPayload.WriteString(line)
-			fmt.Fprintf(w, "data: %s\n\n", line)
-			flusher.Flush()
 		case <-ticker.C:
 			fmt.Fprintf(w, ": heartbeat\n\n")
 			flusher.Flush()
 		}
 	}
+}
+
+// isFinalPayloadLine reports whether line is valid JSON containing a post_text field,
+// which identifies it as the agent's final response (not a progress event).
+func isFinalPayloadLine(line string) bool {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(line), &m); err != nil {
+		return false
+	}
+	_, ok := m["post_text"]
+	return ok
 }
 
 // callPythonAgent sends a POST request to the Python agent's /generate endpoint.

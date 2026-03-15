@@ -9,6 +9,7 @@ export interface BrandData {
   tone_custom?: string | null;
   cta_channel: 'whatsapp' | 'landing_page' | 'dm';
   context_json?: string;
+  asset_urls?: string[];
 }
 
 export interface Brand extends BrandData {

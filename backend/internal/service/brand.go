@@ -12,16 +12,17 @@ var ErrBrandNotFound = errors.New("brand not found")
 
 // Brand represents the brand model at the service layer.
 type Brand struct {
-	ID          string `json:"id"`
-	UserID      string `json:"user_id"`
-	Name        string `json:"name,omitempty"`
-	Niche       string `json:"niche"`
-	City        string `json:"city"`
-	State       string `json:"state"`
-	ToneOfVoice string `json:"tone_of_voice"`
-	ToneCustom  string `json:"tone_custom,omitempty"`
-	CTAChannel  string `json:"cta_channel,omitempty"`
-	ContextJSON string `json:"context_json,omitempty"`
+	ID          string   `json:"id"`
+	UserID      string   `json:"user_id"`
+	Name        string   `json:"name,omitempty"`
+	Niche       string   `json:"niche"`
+	City        string   `json:"city"`
+	State       string   `json:"state"`
+	ToneOfVoice string   `json:"tone_of_voice"`
+	ToneCustom  string   `json:"tone_custom,omitempty"`
+	CTAChannel  string   `json:"cta_channel,omitempty"`
+	ContextJSON string   `json:"context_json,omitempty"`
+	AssetURLs   []string `json:"asset_urls,omitempty"`
 }
 
 // StateLocalityKey returns the normalized state key used for competitor locality.
@@ -31,14 +32,15 @@ func (b *Brand) StateLocalityKey() string {
 
 // BrandInput holds the fields for create/update operations at the service layer.
 type BrandInput struct {
-	Name        string `json:"name,omitempty"`
-	Niche       string `json:"niche"`
-	City        string `json:"city"`
-	State       string `json:"state"`
-	ToneOfVoice string `json:"tone_of_voice"`
-	ToneCustom  string `json:"tone_custom,omitempty"`
-	CTAChannel  string `json:"cta_channel,omitempty"`
-	ContextJSON string `json:"context_json,omitempty"`
+	Name        string   `json:"name,omitempty"`
+	Niche       string   `json:"niche"`
+	City        string   `json:"city"`
+	State       string   `json:"state"`
+	ToneOfVoice string   `json:"tone_of_voice"`
+	ToneCustom  string   `json:"tone_custom,omitempty"`
+	CTAChannel  string   `json:"cta_channel,omitempty"`
+	ContextJSON string   `json:"context_json,omitempty"`
+	AssetURLs   []string `json:"asset_urls,omitempty"`
 }
 
 // BrandService is the concrete implementation backed by PostgreSQL via pgxpool.
@@ -69,14 +71,18 @@ func (s *BrandService) Create(ctx context.Context, userID string, input BrandInp
 		return brand, nil
 	}
 
+	assetURLs := input.AssetURLs
+	if assetURLs == nil {
+		assetURLs = []string{}
+	}
 	row := s.db.QueryRow(ctx,
-		`INSERT INTO brands (user_id, name, niche, city, state, tone_of_voice, tone_custom, cta_channel, context_json)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 RETURNING id, user_id, COALESCE(name,''), niche, city, state, tone_of_voice, COALESCE(tone_custom,''), COALESCE(cta_channel,''), COALESCE(context_json,'')`,
-		userID, input.Name, input.Niche, input.City, stateKey, input.ToneOfVoice, input.ToneCustom, input.CTAChannel, input.ContextJSON,
+		`INSERT INTO brands (user_id, name, niche, city, state, tone_of_voice, tone_custom, cta_channel, context_json, asset_urls)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		 RETURNING id, user_id, COALESCE(name,''), niche, city, state, tone_of_voice, COALESCE(tone_custom,''), COALESCE(cta_channel,''), COALESCE(context_json,''), COALESCE(asset_urls, '{}')`,
+		userID, input.Name, input.Niche, input.City, stateKey, input.ToneOfVoice, input.ToneCustom, input.CTAChannel, input.ContextJSON, assetURLs,
 	)
 	return brand, row.Scan(&brand.ID, &brand.UserID, &brand.Name, &brand.Niche, &brand.City, &brand.State,
-		&brand.ToneOfVoice, &brand.ToneCustom, &brand.CTAChannel, &brand.ContextJSON)
+		&brand.ToneOfVoice, &brand.ToneCustom, &brand.CTAChannel, &brand.ContextJSON, &brand.AssetURLs)
 }
 
 // GetByUserID retrieves the brand for the given user.
@@ -87,11 +93,11 @@ func (s *BrandService) GetByUserID(ctx context.Context, userID string) (*Brand, 
 
 	brand := &Brand{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, user_id, COALESCE(name,''), niche, city, state, tone_of_voice, COALESCE(tone_custom,''), COALESCE(cta_channel,''), COALESCE(context_json,'')
+		`SELECT id, user_id, COALESCE(name,''), niche, city, state, tone_of_voice, COALESCE(tone_custom,''), COALESCE(cta_channel,''), COALESCE(context_json,''), COALESCE(asset_urls, '{}')
 		 FROM brands WHERE user_id = $1 LIMIT 1`,
 		userID,
 	).Scan(&brand.ID, &brand.UserID, &brand.Name, &brand.Niche, &brand.City, &brand.State,
-		&brand.ToneOfVoice, &brand.ToneCustom, &brand.CTAChannel, &brand.ContextJSON)
+		&brand.ToneOfVoice, &brand.ToneCustom, &brand.CTAChannel, &brand.ContextJSON, &brand.AssetURLs)
 	if err != nil {
 		return nil, ErrBrandNotFound
 	}
@@ -115,13 +121,17 @@ func (s *BrandService) Update(ctx context.Context, userID string, input BrandInp
 		return brand, nil
 	}
 
+	updateAssetURLs := input.AssetURLs
+	if updateAssetURLs == nil {
+		updateAssetURLs = []string{}
+	}
 	err := s.db.QueryRow(ctx,
-		`UPDATE brands SET name=$2, niche=$3, city=$4, state=$5, tone_of_voice=$6, tone_custom=$7, cta_channel=$8, context_json=$9
+		`UPDATE brands SET name=$2, niche=$3, city=$4, state=$5, tone_of_voice=$6, tone_custom=$7, cta_channel=$8, context_json=$9, asset_urls=$10
 		 WHERE user_id=$1
-		 RETURNING id, user_id, COALESCE(name,''), niche, city, state, tone_of_voice, COALESCE(tone_custom,''), COALESCE(cta_channel,''), COALESCE(context_json,'')`,
-		userID, input.Name, input.Niche, input.City, stateKey, input.ToneOfVoice, input.ToneCustom, input.CTAChannel, input.ContextJSON,
+		 RETURNING id, user_id, COALESCE(name,''), niche, city, state, tone_of_voice, COALESCE(tone_custom,''), COALESCE(cta_channel,''), COALESCE(context_json,''), COALESCE(asset_urls, '{}')`,
+		userID, input.Name, input.Niche, input.City, stateKey, input.ToneOfVoice, input.ToneCustom, input.CTAChannel, input.ContextJSON, updateAssetURLs,
 	).Scan(&brand.ID, &brand.UserID, &brand.Name, &brand.Niche, &brand.City, &brand.State,
-		&brand.ToneOfVoice, &brand.ToneCustom, &brand.CTAChannel, &brand.ContextJSON)
+		&brand.ToneOfVoice, &brand.ToneCustom, &brand.CTAChannel, &brand.ContextJSON, &brand.AssetURLs)
 	if err != nil {
 		return nil, ErrBrandNotFound
 	}

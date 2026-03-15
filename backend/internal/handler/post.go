@@ -15,7 +15,7 @@ import (
 
 // PostServiceInterface defines the operations needed by the post handler and generate handler.
 type PostServiceInterface interface {
-	Create(ctx context.Context, userID, brandID string, contentJSON, trendContext []byte, platform string) (*service.Post, error)
+	Create(ctx context.Context, userID, brandID string, content service.PostContent, trendContext []byte, platform string) (*service.Post, error)
 	GetByID(ctx context.Context, id, userID string) (*service.Post, error)
 	ListByUserID(ctx context.Context, userID string) ([]service.Post, error)
 	UpdateStatus(ctx context.Context, id, userID, status string) (*service.Post, error)

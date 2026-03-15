@@ -109,7 +109,7 @@ function PipelineCard({
 }) {
   const plat = getPlatformEntry(post.platform);
   const formatLabel =
-    FORMAT_LABEL[post.content_json.suggested_format] ?? "Post";
+    FORMAT_LABEL[post.suggested_format] ?? "Post";
 
   return (
     <div
@@ -155,12 +155,12 @@ function PipelineCard({
         className="text-xs leading-relaxed line-clamp-3"
         style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
       >
-        {post.content_json.post_text}
+        {post.post_text}
       </p>
 
-      {post.content_json.hashtags.length > 0 && (
+      {post.hashtags.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-2">
-          {post.content_json.hashtags.slice(0, 3).map((tag) => (
+          {post.hashtags.slice(0, 3).map((tag) => (
             <span
               key={tag}
               className="text-[10px] px-1.5 py-0.5 rounded-md"
@@ -173,7 +173,7 @@ function PipelineCard({
               {tag}
             </span>
           ))}
-          {post.content_json.hashtags.length > 3 && (
+          {post.hashtags.length > 3 && (
             <span
               className="text-[10px] px-1.5 py-0.5 rounded-md"
               style={{
@@ -182,7 +182,7 @@ function PipelineCard({
                 fontFamily: "var(--font-body)",
               }}
             >
-              +{post.content_json.hashtags.length - 3}
+              +{post.hashtags.length - 3}
             </span>
           )}
         </div>

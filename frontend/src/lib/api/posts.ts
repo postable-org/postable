@@ -1,5 +1,7 @@
 import { apiFetch } from '@/lib/api-client';
 
+// PostContent is the raw SSE done-event payload from the AI agent.
+// Used in PostReview and useSSEGenerate — NOT the same as the DB Post type.
 export interface PostContent {
   post_text: string;
   cta: string;
@@ -7,10 +9,15 @@ export interface PostContent {
   suggested_format: 'carousel' | 'feed_post' | 'story';
   strategic_justification: string;
   tokens_used: number;
-  // AI-generated image
+  // AI-generated image (backend uploads base64 to storage and replaces with image_url)
   image_url?: string;
   image_prompt?: string;
+  // Fallback fields present when backend upload fails or in transit
+  image_base64?: string;
+  image_mime_type?: string;
+  // Gap/competitor analysis — agent may use either key name
   competitor_gap_analysis?: Record<string, unknown>;
+  gap_analysis?: Record<string, unknown>;
 }
 
 export interface Post {
@@ -18,7 +25,15 @@ export interface Post {
   user_id: string;
   brand_id: string;
   status: 'pending' | 'approved' | 'rejected';
-  content_json: PostContent;
+  platform: string;
+  post_text: string;
+  cta: string;
+  hashtags: string[];
+  suggested_format: 'carousel' | 'feed_post' | 'story';
+  strategic_justification: string;
+  tokens_used: number;
+  image_url?: string;
+  image_prompt?: string;
   created_at: string;
   updated_at: string;
 }

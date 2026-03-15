@@ -19,12 +19,35 @@ export interface StageState {
   message: string;
 }
 
+interface BusinessProfile {
+  niche: string;
+  city: string;
+  state: string;
+  tone: string;
+  brand_identity: string;
+  asset_urls?: string[];
+}
+
+interface CampaignBrief {
+  goal: string;
+  target_audience: string;
+  cta_channel: string;
+  theme_hint: string | null;
+}
+
+export interface GenerateRequest {
+  business_profile: BusinessProfile;
+  competitor_handles: string[];
+  post_history: string[];
+  campaign_brief: CampaignBrief;
+}
+
 export interface UseSSEGenerateResult {
   status: SSEStatus;
   stageState: StageState;
   progressMessage: string;
   error: string | null;
-  start: (platform?: string) => void;
+  start: (payload: GenerateRequest) => void;
   reset: () => void;
 }
 
@@ -36,13 +59,19 @@ const STAGE_LABELS: Record<string, string> = {
   'caption': 'Escrevendo legenda',
 };
 
+const STEP_TO_STAGE: Record<string, GenerationStage> = {
+  fetching_trends: 'trend-analysis',
+  analyzing_competitors: 'competitor-analysis',
+  generating_image: 'image-generation',
+};
+
 export function useSSEGenerate(onComplete: (content: PostContent) => void): UseSSEGenerateResult {
   const [status, setStatus] = useState<SSEStatus>('idle');
   const [stageState, setStageState] = useState<StageState>({ stage: null, status: null, message: '' });
   const [progressMessage, setProgressMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const esRef = useRef<EventSource | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const finalResponseRef = useRef<PostContent | null>(null);
   const onCompleteRef = useRef(onComplete);
 
@@ -51,12 +80,12 @@ export function useSSEGenerate(onComplete: (content: PostContent) => void): UseS
   }, [onComplete]);
 
   useEffect(() => {
-    return () => { esRef.current?.close(); };
+    return () => { abortRef.current?.abort(); };
   }, []);
 
   const reset = useCallback(() => {
-    esRef.current?.close();
-    esRef.current = null;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setStatus('idle');
     setStageState({ stage: null, status: null, message: '' });
     setProgressMessage('');
@@ -64,31 +93,76 @@ export function useSSEGenerate(onComplete: (content: PostContent) => void): UseS
     finalResponseRef.current = null;
   }, []);
 
-  const start = useCallback((platform: string = 'instagram') => {
-    // Clean up any existing connection
-    esRef.current?.close();
+  const start = useCallback((payload: GenerateRequest) => {
+    abortRef.current?.abort();
     finalResponseRef.current = null;
     setStageState({ stage: null, status: null, message: '' });
     setProgressMessage('Iniciando...');
     setError(null);
     setStatus('connecting');
 
-    const es = new EventSource(`/api/generate?platform=${encodeURIComponent(platform)}`);
-    esRef.current = es;
-    setStatus('streaming');
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-    es.onmessage = (event: MessageEvent) => {
-      const raw = event.data as string;
+    const handleData = (eventType: string, dataStr: string) => {
+      if (eventType === 'done') {
+        setStatus('complete');
+        if (dataStr && dataStr !== 'null') {
+          try {
+            const parsed = JSON.parse(dataStr) as PostContent;
+            onCompleteRef.current(parsed);
+            return;
+          } catch { /* fall through */ }
+        }
+        const final = finalResponseRef.current;
+        if (final) onCompleteRef.current(final);
+        return;
+      }
 
-      // Try to parse as JSON progress or final response
+      if (eventType === 'error') {
+        console.error('[SSE generate] error event:', dataStr);
+        setError(dataStr || 'Falha na geração');
+        setStatus('error');
+        return;
+      }
+
+      if (eventType === 'progress') {
+        try {
+          const parsed = JSON.parse(dataStr) as Record<string, unknown>;
+          const stage = parsed.stage as string;
+          if (parsed.status === 'complete') {
+            setProgressMessage(STAGE_LABELS[stage] ? `${STAGE_LABELS[stage]} ✓` : '');
+          }
+        } catch { /* ignore */ }
+        return;
+      }
+
+      // Default (no named event): treat as data message
+      const raw = dataStr;
       try {
         const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+        if (parsed.event === 'error') {
+          const msg = (parsed.message as string) || 'Falha na geração';
+          console.error('[SSE generate] agent error event:', msg);
+          setError(msg);
+          setStatus('error');
+          return;
+        }
+
+        if (parsed.event === 'status') {
+          const step = parsed.step as string;
+          const stage = STEP_TO_STAGE[step] ?? null;
+          const msg = (parsed.message as string) || STAGE_LABELS[stage ?? ''] || '';
+          setStageState({ stage, status: 'started', message: msg });
+          setProgressMessage(msg);
+          return;
+        }
 
         if (parsed.type === 'progress') {
           const stage = parsed.stage as GenerationStage;
           const s = parsed.status as StageState['status'];
           const msg = (parsed.message as string) || STAGE_LABELS[stage ?? ''] || '';
-
           setStageState({ stage, status: s, message: msg });
           setProgressMessage(msg);
           return;
@@ -98,58 +172,87 @@ export function useSSEGenerate(onComplete: (content: PostContent) => void): UseS
           const msg = (parsed.message as string) || 'Erro na geração';
           setError(msg);
           setStatus('error');
-          es.close();
           return;
         }
 
-        // It's the final response JSON (has post_text field)
-        if (parsed.post_text !== undefined) {
+        if (parsed.event === 'result' || parsed.post_text !== undefined) {
           finalResponseRef.current = parsed as unknown as PostContent;
           setProgressMessage('Post gerado!');
         }
       } catch {
-        // Non-JSON line — use as display text
         if (raw.trim()) setProgressMessage(raw.trim());
       }
     };
 
-    es.addEventListener('done', () => {
-      es.close();
-      setStatus('complete');
-      const final = finalResponseRef.current;
-      if (final) {
-        onCompleteRef.current(final);
-      }
-    });
-
-    es.addEventListener('progress', (event: Event) => {
-      // Handle explicit SSE `event: progress` from Go layer
+    (async () => {
+      let response: Response;
       try {
-        const data = (event as MessageEvent).data as string;
-        const parsed = JSON.parse(data) as Record<string, unknown>;
-        const stage = parsed.stage as string;
-        if (parsed.status === 'complete') {
-          setProgressMessage(STAGE_LABELS[stage] ? `${STAGE_LABELS[stage]} ✓` : '');
-        }
-      } catch { /* ignore */ }
-    });
-
-    es.addEventListener('error', (event: Event) => {
-      es.close();
-      setStatus('error');
-      const msg = 'data' in event ? (event as MessageEvent).data : null;
-      setError(msg || 'Falha na geração');
-    });
-
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        // Connection closed cleanly after done event — ignore
-        if (status === 'complete') return;
+        response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        setError('Erro de conexão — verifique se o backend está rodando e se você tem um perfil de marca configurado.');
+        setStatus('error');
+        return;
       }
-      es.close();
-      setStatus('error');
-      setError('Erro de conexão — verifique se o backend está rodando e se você tem um perfil de marca configurado.');
-    };
+
+      if (!response.ok) {
+        let msg = 'Falha na geração';
+        try {
+          const json = await response.json() as { error?: string };
+          if (json.error) msg = json.error;
+        } catch { /* ignore */ }
+        setError(msg);
+        setStatus('error');
+        return;
+      }
+
+      setStatus('streaming');
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setError('Falha na geração');
+        setStatus('error');
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEvent = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              currentEvent = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              const dataStr = line.slice(5).trim();
+              handleData(currentEvent || '', dataStr);
+              currentEvent = '';
+            } else if (line === '') {
+              currentEvent = '';
+            }
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        setError('Erro de conexão — verifique se o backend está rodando e se você tem um perfil de marca configurado.');
+        setStatus('error');
+      } finally {
+        reader.releaseLock();
+      }
+    })();
   }, []);
 
   return { status, stageState, progressMessage, error, start, reset };

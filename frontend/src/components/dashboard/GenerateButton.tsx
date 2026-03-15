@@ -1,9 +1,12 @@
 "use client";
 
-import { useSSEGenerate } from "@/lib/hooks/useSSEGenerate";
+import { useSSEGenerate , type GenerateRequest} from "@/lib/hooks/useSSEGenerate";
 import type { SSEStatus, StageState } from "@/lib/hooks/useSSEGenerate";
 import { usePlatform } from "@/lib/context/PlatformContext";
 import type { PostContent } from "@/lib/api/posts";
+import { getBrand } from "@/lib/api/brands";
+import { getCompetitors } from "@/lib/api/competitors";
+import { getPosts } from "@/lib/api/posts";
 import { RotateCcw, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 
@@ -19,6 +22,13 @@ interface GenerateButtonProps {
   dark?: boolean;
 }
 
+const EMPTY_PAYLOAD: GenerateRequest = {
+  business_profile: { niche: "", city: "", state: "", tone: "", brand_identity: "" },
+  competitor_handles: [],
+  post_history: [],
+  campaign_brief: { goal: "", target_audience: "", cta_channel: "", theme_hint: null },
+};
+
 export function GenerateButton({
   onGenerated,
   onStatusChange,
@@ -26,16 +36,47 @@ export function GenerateButton({
   resetRef,
   dark,
 }: GenerateButtonProps) {
-  const { platform } = usePlatform();
-  const { status, stageState, progressMessage, error, start, reset } =
-    useSSEGenerate(onGenerated);
+  const { platform: _platform } = usePlatform();
+  const { status, stageState, progressMessage, error, start, reset } = useSSEGenerate(onGenerated);
 
-  // Expose trigger
+  const handleStart = async () => {
+    try {
+      const [brand, competitorRes, posts] = await Promise.all([
+        getBrand(),
+        getCompetitors(),
+        getPosts(),
+      ]);
+      const payload: GenerateRequest = {
+        business_profile: {
+          niche: brand?.niche ?? "",
+          city: brand?.city ?? "",
+          state: brand?.state ?? "",
+          tone: brand?.tone_of_voice ?? "",
+          brand_identity: brand?.context_json ?? brand?.name ?? "",
+          asset_urls: brand?.asset_urls ?? [],
+        },
+        competitor_handles: competitorRes.competitors
+          .filter((c) => c.status === "active")
+          .map((c) => c.handle),
+        post_history: posts.slice(0, 5).map((p) => p.post_text),
+        campaign_brief: {
+          goal: "",
+          target_audience: "",
+          cta_channel: brand?.cta_channel ?? "",
+          theme_hint: null,
+        },
+      };
+      start(payload);
+    } catch {
+      start(EMPTY_PAYLOAD);
+    }
+  };
+
   useEffect(() => {
     if (triggerRef) {
-      triggerRef.current = () => start(platform);
+      triggerRef.current = handleStart;
     }
-  }, [start, triggerRef, platform]);
+  }, [start, triggerRef, _platform]);
 
   // Expose reset
   useEffect(() => {
@@ -73,7 +114,7 @@ export function GenerateButton({
 
   return (
     <button
-      onClick={() => start(platform)}
+      onClick={handleStart}
       disabled={isActive}
       className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-60 whitespace-nowrap"
       style={{
