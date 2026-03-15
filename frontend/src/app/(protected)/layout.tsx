@@ -2,22 +2,36 @@
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { PlatformProvider, usePlatform } from "@/lib/context/PlatformContext";
-import { useState } from "react";
+import { createClient } from "@/lib/supabase";
+import { useEffect, useState } from "react";
 
 export const dynamic = "force-dynamic";
 
-function ProtectedLayoutInner({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function nameFromEmail(email: string): string {
+  return email.split("@")[0];
+}
+
+function ProtectedLayoutInner({ children }: { children: React.ReactNode }) {
   const { platform, setPlatform } = usePlatform();
+  const [userName, setUserName] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      const email = data.user?.email;
+      if (email) setUserName(nameFromEmail(email));
+    });
+  }, []);
 
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: "#f8f5ef" }}>
       {/* Sidebar — desktop only */}
       <div className="hidden md:block">
-        <Sidebar selectedPlatform={platform} onPlatformChange={setPlatform} />
+        <Sidebar
+          selectedPlatform={platform}
+          onPlatformChange={setPlatform}
+          userName={userName}
+        />
       </div>
 
       {/* Main content */}
