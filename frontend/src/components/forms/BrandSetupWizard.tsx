@@ -118,6 +118,7 @@ export default function BrandSetupWizard() {
       const niche =
         formData.niche === "outro" ? formData.niche_custom : formData.niche;
       await createBrand({
+        name: formData.company_name,
         niche,
         city: formData.city,
         state: formData.state || formData.country,

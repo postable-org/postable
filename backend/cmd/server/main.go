@@ -49,14 +49,20 @@ func main() {
 	loadEnv(".env")
 	middleware.Init()
 
-	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
-	if allowedOrigins == "" {
-		allowedOrigins = "http://localhost:3001, http://localhost:3000"
+	allowedOriginsRaw := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOriginsRaw == "" {
+		allowedOriginsRaw = "http://localhost:3001,http://localhost:3000"
+	}
+	var allowedOrigins []string
+	for _, o := range strings.Split(allowedOriginsRaw, ",") {
+		if trimmed := strings.TrimSpace(o); trimmed != "" {
+			allowedOrigins = append(allowedOrigins, trimmed)
+		}
 	}
 
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{allowedOrigins},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
 		AllowCredentials: false,
@@ -122,6 +128,7 @@ func main() {
 		r.Get("/api/social/oauth/{network}/start", socialOAuthHandler.Start)
 		r.Get("/api/social/connections", socialHandler.ListConnections)
 		r.Post("/api/social/connections", socialHandler.UpsertConnection)
+		r.Delete("/api/social/connections/{id}", socialHandler.DeleteConnection)
 		r.Post("/api/social/publish", socialHandler.Publish)
 		r.Get("/api/social/jobs", socialHandler.ListJobs)
 		r.Post("/api/social/jobs/run-due", socialHandler.RunDueJobs)

@@ -117,6 +117,12 @@ export async function startSocialOAuth(
   return body.auth_url as string;
 }
 
+export async function deleteSocialConnection(id: string): Promise<void> {
+  const res = await apiFetch(`/api/social/connections/${id}`, { method: 'DELETE' });
+  if (res.status === 204) return;
+  await ensureOk(res);
+}
+
 export async function publishSocialPost(
   payload: PublishPayload,
 ): Promise<{ mode: string; job: SocialJob }> {

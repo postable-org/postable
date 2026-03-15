@@ -33,15 +33,14 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Postable AI Service starting up")
     # Validate required env vars at startup
-    if not os.environ.get("GEMINI_API_KEY"):
+    google_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    if not google_key:
         logger.warning(
-            "GEMINI_API_KEY not set — generation will fail. "
+            "GOOGLE_API_KEY not set — generation will fail. "
             "Set it in postable-ai/.env"
         )
-    if not os.environ.get("NANO_BANANA_API_KEY"):
-        logger.warning(
-            "NANO_BANANA_API_KEY not set — image generation will be skipped."
-        )
+    else:
+        logger.info("GOOGLE_API_KEY loaded — text + image generation enabled")
     yield
     logger.info("Postable AI Service shutting down")
 

@@ -2,6 +2,7 @@
 
 import { getPosts, type Post } from "@/lib/api/posts";
 import {
+  deleteSocialConnection,
   getSocialConnections,
   getSocialJobs,
   publishSocialPost,
@@ -11,12 +12,14 @@ import {
   type SocialNetwork,
 } from "@/lib/api/social";
 import {
+  CheckCircle,
   Facebook,
   Instagram,
   Linkedin,
   Loader2,
   Radio,
   Send,
+  Trash2,
   Twitter,
 } from "lucide-react";
 import {
@@ -433,15 +436,17 @@ export default function SocialPage() {
             ) : null}
 
             <div className="space-y-2 pt-2">
-              {connections.length === 0 ? (
+              {connections.filter((c) => c.network === activeNetwork).length === 0 ? (
                 <p
                   className="text-sm"
                   style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
                 >
-                  Nenhuma conta conectada ainda.
+                  Nenhuma conta {activeNetworkMeta.label} conectada ainda.
                 </p>
               ) : (
-                connections.map((connection) => (
+                connections
+                  .filter((c) => c.network === activeNetwork)
+                  .map((connection) => (
                   <div
                     key={connection.id}
                     className="rounded-2xl px-4 py-3"
@@ -465,19 +470,23 @@ export default function SocialPage() {
                             fontFamily: "var(--font-body)",
                           }}
                         >
-                          {networkMeta(connection.network).label} • expira em{" "}
-                          {formatDate(connection.token_expires_at ?? null)}
+                          Expira em {formatDate(connection.token_expires_at ?? null)}
                         </p>
                       </div>
-                      <span
-                        className="text-[11px] font-semibold px-2 py-1 rounded-full"
-                        style={{
-                          backgroundColor: `${networkMeta(connection.network).color}15`,
-                          color: networkMeta(connection.network).color,
+                      <button
+                        onClick={async () => {
+                          try {
+                            await deleteSocialConnection(connection.id);
+                            setConnections((prev) => prev.filter((c) => c.id !== connection.id));
+                          } catch (err) {
+                            setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Falha ao desconectar" });
+                          }
                         }}
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-red-100"
+                        title="Desconectar"
                       >
-                        {connection.network}
-                      </span>
+                        <Trash2 size={14} style={{ color: "#dc2626" }} />
+                      </button>
                     </div>
                   </div>
                 ))
@@ -836,7 +845,7 @@ export default function SocialPage() {
                         {formatDate(job.scheduled_for)}
                       </span>
                       <span className="inline-flex items-center gap-1">
-                        <Instagram size={12} /> Publicado:{" "}
+                        <CheckCircle size={12} /> Publicado:{" "}
                         {formatDate(job.published_at)}
                       </span>
                     </div>

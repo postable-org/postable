@@ -28,6 +28,10 @@ func (m *mockSocialService) ListConnections(ctx context.Context, userID string) 
 	return []service.SocialConnection{}, nil
 }
 
+func (m *mockSocialService) DeleteConnection(ctx context.Context, userID, connectionID string) error {
+	return nil
+}
+
 func (m *mockSocialService) SubmitPublish(ctx context.Context, userID string, in service.SocialPublishInput) (*service.SocialPostJob, error) {
 	if m.submitFn != nil {
 		return m.submitFn(ctx, userID, in)

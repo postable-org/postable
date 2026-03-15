@@ -11,8 +11,8 @@ import (
 	"postable/internal/service"
 )
 
-// ErrBrandNotFound is returned when a brand does not exist for the given user.
-var ErrBrandNotFound = errors.New("brand not found")
+// ErrBrandNotFound aliases the service sentinel so handler checks work correctly.
+var ErrBrandNotFound = service.ErrBrandNotFound
 
 // BrandServiceInterface defines the operations needed by the brand handler.
 type BrandServiceInterface interface {

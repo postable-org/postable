@@ -1,27 +1,15 @@
 """
-Nano Banana Pro — image generation client.
+Gemini Image Generation client.
 
-Configure via environment variables:
-  NANO_BANANA_API_URL   Base URL of the Nano Banana Pro API
-                        (e.g. https://api.nanobanana.ai/v1)
-  NANO_BANANA_API_KEY   Your API key
+Uses the Gemini image generation model (default: gemini-3-pro-image-preview)
+via the Google Generative AI REST API. Shares the same GOOGLE_API_KEY used
+for text generation — no separate API key needed.
 
-The client POSTs to {NANO_BANANA_API_URL}/images/generate with:
-  {
-    "prompt": "<image description>",
-    "width": 1080,
-    "height": 1080,
-    "model": "nano-banana-pro"
-  }
-
-Expected response (any of these formats are auto-detected):
-  { "image_url": "https://..." }
-  { "url": "https://..." }
-  { "data": [{ "url": "https://..." }] }
-  { "output": "https://..." }
+Returns a base64 data URL (data:image/png;base64,...) on success, or None.
 """
 
 import os
+import base64
 import logging
 from typing import Optional
 
@@ -29,79 +17,66 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+_GOOGLE_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+
 
 class NanaBananaClient:
+    """Drop-in replacement backed by Gemini image generation."""
+
     def __init__(self) -> None:
-        self.api_url = os.environ.get(
-            "NANO_BANANA_API_URL", "https://api.nanobanana.ai/v1"
-        ).rstrip("/")
-        self.api_key = os.environ.get("NANO_BANANA_API_KEY", "")
-        self.model = os.environ.get("NANO_BANANA_MODEL", "nano-banana-pro")
+        self.model = os.environ.get("IMAGE_MODEL", "gemini-3-pro-image-preview")
 
-    def _headers(self) -> dict:
-        h = {"Content-Type": "application/json"}
-        if self.api_key:
-            h["Authorization"] = f"Bearer {self.api_key}"
-        return h
-
-    def _extract_url(self, data: dict) -> Optional[str]:
-        """Try multiple response shapes to find the image URL."""
-        for key in ("image_url", "url", "output", "image"):
-            if key in data and isinstance(data[key], str) and data[key].startswith("http"):
-                return data[key]
-        # OpenAI-compatible: { "data": [{ "url": "..." }] }
-        if "data" in data and isinstance(data["data"], list) and data["data"]:
-            item = data["data"][0]
-            if isinstance(item, dict):
-                for key in ("url", "image_url"):
-                    if key in item and isinstance(item[key], str):
-                        return item[key]
-        return None
+    def _get_api_key(self) -> Optional[str]:
+        return os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
     async def generate(self, prompt: str, width: int = 1080, height: int = 1080) -> Optional[str]:
         """
-        Generate an image from a text prompt.
-        Returns the image URL, or None if generation failed or is not configured.
+        Generate an image from a text prompt using Gemini.
+        Returns a base64 data URL, or None if generation failed.
         """
-        if not self.api_key:
-            logger.warning(
-                "NANO_BANANA_API_KEY not set — skipping image generation. "
-                "Set NANO_BANANA_API_URL and NANO_BANANA_API_KEY to enable."
-            )
+        api_key = self._get_api_key()
+        if not api_key:
+            logger.warning("GOOGLE_API_KEY not set — skipping image generation.")
             return None
 
+        url = f"{_GOOGLE_API_BASE}/{self.model}:generateContent?key={api_key}"
         payload = {
-            "prompt": prompt,
-            "width": width,
-            "height": height,
-            "model": self.model,
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseModalities": ["IMAGE", "TEXT"]},
         }
 
         try:
-            async with httpx.AsyncClient(timeout=90.0) as client:
-                resp = await client.post(
-                    f"{self.api_url}/images/generate",
-                    headers=self._headers(),
-                    json=payload,
-                )
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(url, json=payload)
 
             if resp.status_code != 200:
                 logger.error(
-                    "Nano Banana returned %d: %s",
+                    "Gemini image generation returned %d: %s",
                     resp.status_code,
-                    resp.text[:300],
+                    resp.text[:500],
                 )
                 return None
 
             data = resp.json()
-            url = self._extract_url(data)
-            if not url:
-                logger.error("Nano Banana: could not extract image URL from response: %s", data)
-            return url
+            candidates = data.get("candidates", [])
+            if not candidates:
+                logger.error("Gemini image: no candidates in response")
+                return None
+
+            for part in candidates[0].get("content", {}).get("parts", []):
+                inline = part.get("inlineData") or part.get("inline_data")
+                if inline:
+                    mime = inline.get("mimeType", "image/png")
+                    b64 = inline.get("data", "")
+                    if b64:
+                        return f"data:{mime};base64,{b64}"
+
+            logger.error("Gemini image: no image data found in response parts")
+            return None
 
         except httpx.TimeoutException:
-            logger.error("Nano Banana: request timed out after 90s")
+            logger.error("Gemini image: request timed out after 120s")
             return None
         except Exception as e:
-            logger.error("Nano Banana: unexpected error: %s", e)
+            logger.error("Gemini image: unexpected error: %s", e)
             return None

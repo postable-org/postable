@@ -17,15 +17,22 @@ _model: genai.GenerativeModel | None = None
 _search_model: genai.GenerativeModel | None = None
 
 
+def _get_api_key() -> str:
+    """Return the Google API key, supporting both GOOGLE_API_KEY and GEMINI_API_KEY env vars."""
+    key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    if not key:
+        raise RuntimeError("GOOGLE_API_KEY environment variable is not set")
+    return key
+
+
 def _get_model() -> genai.GenerativeModel:
     global _model
     if _model is None:
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY environment variable is not set")
+        api_key = _get_api_key()
         genai.configure(api_key=api_key)
+        model_name = os.environ.get("TEXT_MODEL", "gemini-2.5-flash")
         _model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+            model_name=model_name,
             generation_config=genai.GenerationConfig(
                 temperature=0.7,
                 top_p=0.95,
@@ -39,12 +46,11 @@ def _get_search_model() -> genai.GenerativeModel:
     """Gemini model with Google Search grounding for real-time trend data."""
     global _search_model
     if _search_model is None:
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY environment variable is not set")
+        api_key = _get_api_key()
         genai.configure(api_key=api_key)
+        model_name = os.environ.get("TEXT_MODEL", "gemini-2.5-flash")
         _search_model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+            model_name=model_name,
             generation_config=genai.GenerationConfig(
                 temperature=0.5,
                 top_p=0.9,

@@ -236,6 +236,22 @@ func (s *SocialService) ListConnections(ctx context.Context, userID string) ([]S
 	return out, rows.Err()
 }
 
+func (s *SocialService) DeleteConnection(ctx context.Context, userID, connectionID string) error {
+	if s.db == nil {
+		return ErrSocialUnavailable
+	}
+	tag, err := s.db.Exec(ctx, `
+		DELETE FROM social_connections WHERE id = $1 AND user_id = $2
+	`, connectionID, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrConnectionNotFound
+	}
+	return nil
+}
+
 func (s *SocialService) SubmitPublish(ctx context.Context, userID string, in SocialPublishInput) (*SocialPostJob, error) {
 	if s.db == nil {
 		return nil, ErrSocialUnavailable

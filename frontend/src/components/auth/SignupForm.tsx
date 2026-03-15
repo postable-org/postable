@@ -43,8 +43,8 @@ export default function SignupForm() {
     if (error) {
       setServerError(error.message);
     } else if (authData?.session) {
-      // Email confirmation is disabled — Supabase returned a session immediately
-      router.push('/dashboard');
+      // Email confirmation is disabled — go straight to onboarding
+      router.push('/brand-setup');
     } else {
       // Email confirmation is enabled — show "check your email" message
       setSuccess(true);

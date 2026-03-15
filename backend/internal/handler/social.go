@@ -9,12 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"postable/internal/service"
 )
 
 type SocialServiceInterface interface {
 	UpsertConnection(ctx context.Context, userID string, in service.SocialConnectionInput) (*service.SocialConnection, error)
 	ListConnections(ctx context.Context, userID string) ([]service.SocialConnection, error)
+	DeleteConnection(ctx context.Context, userID, connectionID string) error
 	SubmitPublish(ctx context.Context, userID string, in service.SocialPublishInput) (*service.SocialPostJob, error)
 	ListJobs(ctx context.Context, userID, status string) ([]service.SocialPostJob, error)
 	ProcessDueJobs(ctx context.Context, now time.Time, limit int) (int, error)
@@ -74,6 +77,29 @@ func (h *SocialHandler) ListConnections(w http.ResponseWriter, r *http.Request) 
 		connections = []service.SocialConnection{}
 	}
 	writeJSON(w, http.StatusOK, connections)
+}
+
+func (h *SocialHandler) DeleteConnection(w http.ResponseWriter, r *http.Request) {
+	userID, ok := getUserID(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	connectionID := chi.URLParam(r, "id")
+	if connectionID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing connection id"})
+		return
+	}
+	if err := h.svc.DeleteConnection(r.Context(), userID, connectionID); err != nil {
+		if errors.Is(err, service.ErrConnectionNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "connection not found"})
+			return
+		}
+		slog.Error("social connection delete failed", "userID", userID, "id", connectionID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *SocialHandler) Publish(w http.ResponseWriter, r *http.Request) {

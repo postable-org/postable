@@ -141,10 +141,13 @@ export function useSSEGenerate(onComplete: (content: PostContent) => void): UseS
     });
 
     es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) return;
+      if (es.readyState === EventSource.CLOSED) {
+        // Connection closed cleanly after done event — ignore
+        if (status === 'complete') return;
+      }
       es.close();
       setStatus('error');
-      setError('Erro de conexão');
+      setError('Erro de conexão — verifique se o backend está rodando e se você tem um perfil de marca configurado.');
     };
   }, []);
 

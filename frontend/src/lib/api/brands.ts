@@ -1,12 +1,14 @@
 import { apiFetch } from '@/lib/api-client';
 
 export interface BrandData {
+  name?: string;
   niche: string;
   city: string;
   state: string;
   tone_of_voice: string;
   tone_custom?: string | null;
   cta_channel: 'whatsapp' | 'landing_page' | 'dm';
+  context_json?: string;
 }
 
 export interface Brand extends BrandData {
