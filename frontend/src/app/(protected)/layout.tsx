@@ -9,11 +9,10 @@ import {
   FileText,
   Kanban,
   LayoutDashboard,
-  Megaphone,
   Share2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +26,6 @@ const MOBILE_NAV_ITEMS = [
   { href: "/pipeline", label: "Pipeline", Icon: Kanban },
   { href: "/analytics", label: "Métricas", Icon: BarChart2 },
   { href: "/social", label: "Social", Icon: Share2 },
-  { href: "/campaigns", label: "Camps.", Icon: Megaphone },
   { href: "/context", label: "IA", Icon: Brain },
 ] as const;
 
@@ -111,10 +109,7 @@ function ProtectedLayoutInner({ children }: { children: React.ReactNode }) {
                   : "rgba(248,245,239,0.4)",
               }}
             >
-              <Icon
-                size={18}
-                strokeWidth={isActive ? 2 : 1.6}
-              />
+              <Icon size={18} strokeWidth={isActive ? 2 : 1.6} />
               <span>{label}</span>
             </a>
           );

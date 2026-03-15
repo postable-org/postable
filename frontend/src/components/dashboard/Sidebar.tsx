@@ -1,5 +1,6 @@
 "use client";
 
+import { XLogo } from "@/components/icons/XLogo";
 import { createPortalSession, getSubscription } from "@/lib/api/subscription";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -11,7 +12,6 @@ import {
   Kanban,
   LayoutDashboard,
   Linkedin,
-  Megaphone,
   PanelLeft,
   Settings,
   Share2,
@@ -20,14 +20,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "./LogoutButton";
-import { XLogo } from "@/components/icons/XLogo";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Visão Geral", Icon: LayoutDashboard },
   { href: "/posts", label: "Posts", Icon: FileText },
   { href: "/social", label: "Social", Icon: Share2 },
   { href: "/pipeline", label: "Pipeline", Icon: Kanban },
-  { href: "/campaigns", label: "Campanhas", Icon: Megaphone },
   { href: "/analytics", label: "Métricas", Icon: BarChart2 },
   { href: "/context", label: "Contexto", Icon: Brain },
 ];
@@ -86,8 +84,16 @@ export function Sidebar({
       }}
     >
       {/* Logo + Toggle */}
-      <div className="px-3 py-4 flex items-center shrink-0" style={{ gap: isCollapsed ? 0 : "10px", justifyContent: isCollapsed ? "center" : "space-between" }}>
-        <div className={`flex items-center gap-2.5 ${isCollapsed ? "hidden" : "flex"}`}>
+      <div
+        className="px-3 py-4 flex items-center shrink-0"
+        style={{
+          gap: isCollapsed ? 0 : "10px",
+          justifyContent: isCollapsed ? "center" : "space-between",
+        }}
+      >
+        <div
+          className={`flex items-center gap-2.5 ${isCollapsed ? "hidden" : "flex"}`}
+        >
           <div className="logo-glow shrink-0">
             <Image
               src="/logo.webp"
@@ -303,8 +309,8 @@ export function Sidebar({
       />
 
       {/* Plan badge */}
-      {!isCollapsed && (
-        subscription ? (
+      {!isCollapsed &&
+        (subscription ? (
           <div className="px-4 pb-2">
             <button
               type="button"
@@ -346,8 +352,7 @@ export function Sidebar({
               Fazer upgrade
             </Link>
           </div>
-        )
-      )}
+        ))}
 
       {/* Settings */}
       <div className="px-2 pb-1">

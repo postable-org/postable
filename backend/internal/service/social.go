@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -837,6 +839,24 @@ func normalizeLinkedInPostType(value string, mediaURLs []string, link string) st
 	}
 }
 
+func normalizeLinkedInPersonURN(accountID string) string {
+	v := strings.TrimSpace(accountID)
+	if v == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(v), "urn:li:person:") {
+		return v
+	}
+	v = strings.TrimPrefix(v, "urn:")
+	v = strings.TrimPrefix(v, "li:")
+	v = strings.TrimPrefix(v, "person:")
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+	return "urn:li:person:" + v
+}
+
 func composeNetworkText(payload SocialPublishPayload, maxLen int) string {
 	parts := []string{}
 	base := strings.TrimSpace(payload.Text)
@@ -1201,6 +1221,10 @@ func (p *LinkedInPublisher) Publish(ctx context.Context, conn SocialConnection, 
 	finalText := composeNetworkText(payload, 0)
 	shareMediaCategory := "NONE"
 	media := make([]interface{}, 0)
+	authorURN := normalizeLinkedInPersonURN(conn.AccountID)
+	if authorURN == "" {
+		return nil, errors.New("linkedin publish failed: missing account_id")
+	}
 
 	postType := payload.LinkedInPostType
 	if postType == "" {
@@ -1218,7 +1242,7 @@ func (p *LinkedInPublisher) Publish(ctx context.Context, conn SocialConnection, 
 	if postType == "image" && len(payload.MediaURLs) > 0 {
 		shareMediaCategory = "IMAGE"
 		for _, mediaURL := range payload.MediaURLs {
-			assetURN, err := p.uploadImageAsset(ctx, conn.AccessToken, conn.AccountID, mediaURL)
+			assetURN, err := p.uploadImageAsset(ctx, conn.AccessToken, authorURN, mediaURL)
 			if err != nil {
 				return nil, err
 			}
@@ -1238,7 +1262,7 @@ func (p *LinkedInPublisher) Publish(ctx context.Context, conn SocialConnection, 
 	}
 
 	body := map[string]interface{}{
-		"author":         conn.AccountID,
+		"author":         authorURN,
 		"lifecycleState": "PUBLISHED",
 		"specificContent": map[string]interface{}{
 			"com.linkedin.ugc.ShareContent": shareContent,
@@ -1361,10 +1385,11 @@ func NewFacebookPublisher(client HTTPDoer) *FacebookPublisher {
 
 func (p *FacebookPublisher) Publish(ctx context.Context, conn SocialConnection, payload SocialPublishPayload) (*PublishResult, error) {
 	finalText := composeNetworkText(payload, 0)
-	if payload.FacebookPostType == "photo" && len(payload.MediaURLs) > 0 {
+	if len(payload.MediaURLs) > 0 && strings.TrimSpace(payload.MediaURLs[0]) != "" {
 		form := map[string]string{
-			"url":     payload.MediaURLs[0],
-			"caption": finalText,
+			"url":       strings.TrimSpace(payload.MediaURLs[0]),
+			"caption":   finalText,
+			"published": "true",
 		}
 		url := fmt.Sprintf("https://graph.facebook.com/v25.0/%s/photos", conn.AccountID)
 		raw, status, _, err := doFormRequest(ctx, p.client, http.MethodPost, url, conn.AccessToken, form)
@@ -1749,10 +1774,85 @@ func NewXPublisher(client HTTPDoer) *XPublisher {
 	return &XPublisher{client: client}
 }
 
+func xAPIVersion() string {
+	v := strings.TrimSpace(os.Getenv("X_API_VERSION"))
+	if v == "" {
+		return "2"
+	}
+	return strings.TrimPrefix(v, "v")
+}
+
+func xAPIHost() string {
+	h := strings.TrimSpace(os.Getenv("X_API_HOST"))
+	if h == "" {
+		return "https://api.x.com"
+	}
+	return strings.TrimSuffix(h, "/")
+}
+
+func xFallbackAPIHost() string {
+	h := strings.TrimSpace(os.Getenv("X_API_FALLBACK_HOST"))
+	if h == "" {
+		return "https://api.twitter.com"
+	}
+	return strings.TrimSuffix(h, "/")
+}
+
+func xMediaUploadHost() string {
+	h := strings.TrimSpace(os.Getenv("X_MEDIA_UPLOAD_HOST"))
+	if h == "" {
+		return "https://upload.twitter.com"
+	}
+	return strings.TrimSuffix(h, "/")
+}
+
+func xMediaUploadFallbackHost() string {
+	h := strings.TrimSpace(os.Getenv("X_MEDIA_UPLOAD_FALLBACK_HOST"))
+	if h == "" {
+		return "https://upload.x.com"
+	}
+	return strings.TrimSuffix(h, "/")
+}
+
 func (p *XPublisher) Publish(ctx context.Context, conn SocialConnection, payload SocialPublishPayload) (*PublishResult, error) {
 	finalText := composeNetworkText(payload, 280)
 	body := map[string]interface{}{"text": finalText}
-	raw, status, _, err := doJSONRequest(ctx, p.client, http.MethodPost, "https://api.x.com/2/tweets", conn.AccessToken, body, nil)
+
+	mediaURLs := trimStringSlice(payload.MediaURLs)
+	if len(mediaURLs) > 0 {
+		scope := xConnectionScope(conn)
+		if scope != "" && !xHasScope(scope, "media.write") {
+			return nil, fmt.Errorf("x token sem escopo media.write. Escopo atual: %q. Reconecte a conta X e autorize novamente", scope)
+		}
+		mediaIDs := make([]string, 0, len(mediaURLs))
+		for _, mediaURL := range mediaURLs {
+			mediaID, err := p.uploadXMedia(ctx, conn, mediaURL)
+			if err != nil {
+				return nil, err
+			}
+			if strings.TrimSpace(mediaID) != "" {
+				mediaIDs = append(mediaIDs, mediaID)
+			}
+			if len(mediaIDs) >= 4 {
+				break
+			}
+		}
+		if len(mediaIDs) > 0 {
+			body["media"] = map[string]interface{}{"media_ids": mediaIDs}
+		}
+	}
+
+	endpoint := fmt.Sprintf("%s/%s/tweets", xAPIHost(), xAPIVersion())
+	raw, status, _, err := doJSONRequest(ctx, p.client, http.MethodPost, endpoint, conn.AccessToken, body, nil)
+	if err == nil && status >= 400 {
+		fallbackEndpoint := fmt.Sprintf("%s/%s/tweets", xFallbackAPIHost(), xAPIVersion())
+		fallbackRaw, fallbackStatus, _, fallbackErr := doJSONRequest(ctx, p.client, http.MethodPost, fallbackEndpoint, conn.AccessToken, body, nil)
+		if fallbackErr == nil {
+			raw = fallbackRaw
+			status = fallbackStatus
+			err = nil
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1766,6 +1866,189 @@ func (p *XPublisher) Publish(ctx context.Context, conn SocialConnection, payload
 	}
 	_ = json.Unmarshal(raw, &parsed)
 	return &PublishResult{ProviderPostID: parsed.Data.ID, RawResponse: raw}, nil
+}
+
+func xConnectionScope(conn SocialConnection) string {
+	if len(conn.MetadataJSON) == 0 {
+		return ""
+	}
+	var meta map[string]interface{}
+	if err := json.Unmarshal(conn.MetadataJSON, &meta); err != nil {
+		return ""
+	}
+	raw, ok := meta["scope"]
+	if !ok {
+		return ""
+	}
+	v, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(v)
+}
+
+func xHasScope(scope, required string) bool {
+	required = strings.TrimSpace(required)
+	if required == "" {
+		return true
+	}
+	for _, part := range strings.Fields(strings.TrimSpace(scope)) {
+		if strings.TrimSpace(part) == required {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *XPublisher) uploadXMedia(ctx context.Context, conn SocialConnection, mediaURL string) (string, error) {
+	accessToken := conn.AccessToken
+	mediaReq, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
+	if err != nil {
+		return "", err
+	}
+	mediaResp, err := p.client.Do(mediaReq)
+	if err != nil {
+		return "", err
+	}
+	defer mediaResp.Body.Close()
+	if mediaResp.StatusCode < 200 || mediaResp.StatusCode >= 300 {
+		body, _ := io.ReadAll(mediaResp.Body)
+		return "", fmt.Errorf("x media fetch failed: status=%d body=%s", mediaResp.StatusCode, string(body))
+	}
+
+	mediaBytes, err := io.ReadAll(mediaResp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	uploadBody := &bytes.Buffer{}
+	writer := multipart.NewWriter(uploadBody)
+	part, err := writer.CreateFormFile("media", path.Base(mediaURL))
+	if err != nil {
+		return "", err
+	}
+	if _, err := part.Write(mediaBytes); err != nil {
+		return "", err
+	}
+	if err := writer.Close(); err != nil {
+		return "", err
+	}
+	contentType := writer.FormDataContentType()
+
+	// Try v2 media upload first (OAuth2 user token compatibility), then fall
+	// back to legacy v1.1 upload endpoint for broader provider compatibility.
+	v2URLs := []string{
+		fmt.Sprintf("%s/%s/media/upload", xAPIHost(), xAPIVersion()),
+		fmt.Sprintf("%s/%s/media/upload", xFallbackAPIHost(), xAPIVersion()),
+	}
+	for _, endpoint := range v2URLs {
+		raw, status, err := p.uploadXMediaOnce(ctx, endpoint, accessToken, uploadBody, contentType)
+		if err != nil {
+			continue
+		}
+		if status >= 200 && status < 300 {
+			if mediaID, parseErr := parseXMediaID(raw); parseErr == nil {
+				return mediaID, nil
+			}
+		}
+	}
+
+	uploadPath := "/1.1/media/upload.json"
+	primaryURL := xMediaUploadHost() + uploadPath
+	raw, status, err := p.uploadXMediaOnce(ctx, primaryURL, accessToken, uploadBody, contentType)
+	if err != nil {
+		return "", err
+	}
+	if status < 200 || status >= 300 {
+		fallbackURL := xMediaUploadFallbackHost() + uploadPath
+		fallbackRaw, fallbackStatus, fallbackErr := p.uploadXMediaOnce(ctx, fallbackURL, accessToken, uploadBody, contentType)
+		if fallbackErr == nil {
+			raw = fallbackRaw
+			status = fallbackStatus
+		}
+	}
+	if status < 200 || status >= 300 {
+		return "", formatXMediaUploadError(status, raw, xConnectionScope(conn))
+	}
+
+	mediaID, err := parseXMediaID(raw)
+	if err != nil {
+		return "", err
+	}
+	return mediaID, nil
+}
+
+func parseXMediaID(raw []byte) (string, error) {
+	var parsed struct {
+		MediaIDString string `json:"media_id_string"`
+		MediaID       int64  `json:"media_id"`
+		Data          struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(parsed.Data.ID) != "" {
+		return parsed.Data.ID, nil
+	}
+	if strings.TrimSpace(parsed.MediaIDString) != "" {
+		return parsed.MediaIDString, nil
+	}
+	if parsed.MediaID > 0 {
+		return fmt.Sprintf("%d", parsed.MediaID), nil
+	}
+	return "", errors.New("x media upload succeeded but response did not include media id")
+}
+
+func formatXMediaUploadError(status int, raw []byte, scope string) error {
+	message := strings.TrimSpace(string(raw))
+	var parsed struct {
+		Title  string `json:"title"`
+		Detail string `json:"detail"`
+		Error  string `json:"error"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err == nil {
+		switch {
+		case strings.TrimSpace(parsed.Detail) != "":
+			message = strings.TrimSpace(parsed.Detail)
+		case strings.TrimSpace(parsed.Title) != "":
+			message = strings.TrimSpace(parsed.Title)
+		case strings.TrimSpace(parsed.Error) != "":
+			message = strings.TrimSpace(parsed.Error)
+		}
+	}
+
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		scopeInfo := ""
+		if strings.TrimSpace(scope) != "" {
+			scopeInfo = fmt.Sprintf(" escopo_atual=%q.", scope)
+		}
+		return fmt.Errorf("x media upload não autorizado (status=%d).%s Reconecte a conta X com media.write/tweet.write e confirme no Developer Portal que o app está com permissão 'Read and write'. detalhe: %s", status, scopeInfo, message)
+	}
+
+	return fmt.Errorf("x media upload failed: status=%d body=%s", status, message)
+}
+
+func (p *XPublisher) uploadXMediaOnce(ctx context.Context, endpoint, accessToken string, body *bytes.Buffer, contentType string) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body.Bytes()))
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", contentType)
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, err
+	}
+	return raw, resp.StatusCode, nil
 }
 
 func doJSONRequest(ctx context.Context, client HTTPDoer, method, url, bearer string, body interface{}, extraHeaders map[string]string) ([]byte, int, http.Header, error) {

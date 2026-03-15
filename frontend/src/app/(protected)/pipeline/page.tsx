@@ -1,8 +1,9 @@
 "use client";
 
 import { XLogo } from "@/components/icons/XLogo";
+import { getPipelineBoard } from "@/lib/api/pipeline";
 import type { Post } from "@/lib/api/posts";
-import { getPosts, updatePostStatus } from "@/lib/api/posts";
+import { updatePostStatus } from "@/lib/api/posts";
 import {
   CheckCircle2,
   Clock,
@@ -26,14 +27,14 @@ type BoardState = Record<ColumnId, BoardPost[]>;
 const COLUMN_DEFS = [
   {
     id: "draft" as ColumnId,
-    label: "Rascunho",
+    label: "Rascunhos salvos",
     color: "#8c8880",
     bgLight: "#f0ede7",
     Icon: Sparkles,
   },
   {
     id: "pending" as ColumnId,
-    label: "Aguardando",
+    label: "Aguardando aprovação",
     color: "#D97706",
     bgLight: "#FEF3C7",
     Icon: Clock,
@@ -332,23 +333,24 @@ export default function PipelinePage() {
   const [dragOver, setDragOver] = useState<ColumnId | null>(null);
 
   useEffect(() => {
-    getPosts()
-      .then((posts) => {
-        setBoard((prev) => ({
-          ...prev,
-          pending: posts
-            .filter((p) => p.status === "pending")
-            .map((p) => ({ ...p, platform: "instagram" })),
-          approved: posts
-            .filter((p) => p.status === "approved")
-            .map((p) => ({ ...p, platform: "instagram" })),
-          rejected: posts
-            .filter((p) => p.status === "rejected")
-            .map((p) => ({ ...p, platform: "instagram" })),
-        }));
+    getPipelineBoard(activePlatform)
+      .then((data) => {
+        const asBoardPosts = (posts: Post[]): BoardPost[] =>
+          posts.map((post) => ({
+            ...post,
+            platform: post.platform || "instagram",
+          }));
+
+        setBoard({
+          draft: asBoardPosts(data.draft ?? []),
+          pending: asBoardPosts(data.pending ?? []),
+          approved: asBoardPosts(data.approved ?? []),
+          published: asBoardPosts(data.published ?? []),
+          rejected: asBoardPosts(data.rejected ?? []),
+        });
       })
       .catch(() => {});
-  }, []);
+  }, [activePlatform]);
 
   const handleDragStart = useCallback(
     (e: React.DragEvent, id: string, fromColumn: ColumnId) => {
@@ -407,18 +409,7 @@ export default function PipelinePage() {
     [dragging],
   );
 
-  const filteredBoard: BoardState =
-    activePlatform === "all"
-      ? board
-      : {
-          draft: board.draft.filter((p) => p.platform === activePlatform),
-          pending: board.pending.filter((p) => p.platform === activePlatform),
-          approved: board.approved.filter((p) => p.platform === activePlatform),
-          published: board.published.filter(
-            (p) => p.platform === activePlatform,
-          ),
-          rejected: board.rejected.filter((p) => p.platform === activePlatform),
-        };
+  const filteredBoard: BoardState = board;
 
   const totalPosts = Object.values(board).reduce(
     (acc, col) => acc + col.length,

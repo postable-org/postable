@@ -189,6 +189,9 @@ func main() {
 			r.Get("/api/posts/{id}/insights", postHandler.GetPostInsights)
 			r.Patch("/api/posts/{id}/status", postHandler.UpdateStatus)
 
+			pipelineHandler := handler.NewPipelineHandler(postSvc, socialSvc)
+			r.Get("/api/pipeline/board", pipelineHandler.Board)
+
 			generateHandler := handler.NewGenerateHandlerWithQuota(generateSvc, brandSvc, postSvc, competitorSvc, subSvc, storageSvc)
 			r.Post("/api/generate", generateHandler.Generate)
 		})

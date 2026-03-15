@@ -129,7 +129,7 @@ func (s *SocialOAuthService) StartAuthorization(ctx context.Context, userID, net
 		query.Set("response_type", "code")
 		query.Set("client_id", clientID)
 		query.Set("redirect_uri", s.callbackURL(network))
-		query.Set("scope", "tweet.read tweet.write users.read offline.access")
+		query.Set("scope", "tweet.read tweet.write users.read media.write offline.access")
 		query.Set("state", state)
 		query.Set("code_challenge", pkceS256Challenge(codeVerifier))
 		query.Set("code_challenge_method", "S256")

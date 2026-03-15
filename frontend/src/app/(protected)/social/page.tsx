@@ -304,6 +304,15 @@ export default function SocialPage() {
       .filter((item) => item.url)
       .map((item) => item.url!);
 
+    const hasUploadingMedia = mediaFileItems.some((item) => item.uploading);
+    if (hasUploadingMedia) {
+      setFeedback({
+        tone: "error",
+        text: "Aguarde o upload da imagem terminar antes de publicar.",
+      });
+      return;
+    }
+
     let dbGeneratedPost: Post | undefined;
     if (publishForm.source === "generated" && publishForm.postId) {
       try {
@@ -321,6 +330,14 @@ export default function SocialPage() {
           : selectedGeneratedPost?.image_url
             ? [selectedGeneratedPost.image_url]
             : [];
+
+    if (mediaFileItems.length > 0 && effectiveMediaUrls.length === 0) {
+      setFeedback({
+        tone: "error",
+        text: "Não foi possível usar a imagem anexada. Remova e tente anexar novamente.",
+      });
+      return;
+    }
 
     const inputHashtags = parseListField(publishForm.hashtags, "#");
     const hashtags =

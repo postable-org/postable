@@ -1,9 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient } from "@supabase/ssr";
+import { NextRequest, NextResponse } from "next/server";
 
-const PROTECTED = ['/dashboard', '/brand-setup', '/posts', '/campaigns', '/context', '/pricing', '/settings', '/social', '/analytics', '/pipeline'];
-const AUTH_ONLY = ['/login', '/signup'];
-const SUBSCRIPTION_EXEMPT = ['/brand-setup', '/pricing'];
+const PROTECTED = [
+  "/dashboard",
+  "/brand-setup",
+  "/posts",
+  "/context",
+  "/pricing",
+  "/settings",
+  "/social",
+  "/analytics",
+  "/pipeline",
+];
+const AUTH_ONLY = ["/login", "/signup"];
+const SUBSCRIPTION_EXEMPT = ["/brand-setup", "/pricing"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -16,12 +26,22 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: (cookies: { name: string; value: string; options?: Record<string, unknown> }[]) =>
+        setAll: (
+          cookies: {
+            name: string;
+            value: string;
+            options?: Record<string, unknown>;
+          }[],
+        ) =>
           cookies.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2])
+            response.cookies.set(
+              name,
+              value,
+              options as Parameters<typeof response.cookies.set>[2],
+            ),
           ),
       },
-    }
+    },
   );
 
   const {
@@ -34,27 +54,27 @@ export async function middleware(request: NextRequest) {
 
   // Redirect authenticated users away from auth pages
   if (isAuth && isAuthOnly) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // Protect app routes — require auth
   if (!isAuth && isProtected) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   // Brand setup guard — authenticated users accessing /dashboard must have a brand profile
-  if (isAuth && pathname.startsWith('/dashboard') && session?.access_token) {
+  if (isAuth && pathname.startsWith("/dashboard") && session?.access_token) {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
       const brandRes = await fetch(`${apiUrl}/api/brands`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         signal: AbortSignal.timeout(3000),
       });
       if (brandRes.status === 404) {
-        return NextResponse.redirect(new URL('/brand-setup', request.url));
+        return NextResponse.redirect(new URL("/brand-setup", request.url));
       }
     } catch {
       // Best-effort: allow through if check fails (network error, timeout)
@@ -70,13 +90,13 @@ export async function middleware(request: NextRequest) {
 
   if (needsSubCheck) {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
       const subRes = await fetch(`${apiUrl}/api/subscription`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
         signal: AbortSignal.timeout(3000),
       });
       if (subRes.status === 402 || subRes.status === 404) {
-        return NextResponse.redirect(new URL('/pricing', request.url));
+        return NextResponse.redirect(new URL("/pricing", request.url));
       }
       // past_due → allow through (banner handled in layout/settings)
     } catch {
@@ -89,5 +109,5 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   // Exclude static assets, Next.js internals, API routes, and the auth callback
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|auth).*)'],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api|auth).*)"],
 };
