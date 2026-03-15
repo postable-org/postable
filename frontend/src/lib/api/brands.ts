@@ -10,6 +10,27 @@ export interface BrandData {
   cta_channel: 'whatsapp' | 'landing_page' | 'dm';
   context_json?: string;
   asset_urls?: string[];
+
+  // Visual identity
+  brand_colors?: string[];
+  brand_fonts?: string[];
+  design_style?: string;
+
+  // Target audience
+  target_age_min?: number;
+  target_age_max?: number;
+  target_gender?: string;
+  target_audience_description?: string;
+
+  // Brand identity
+  company_history?: string;
+  brand_tagline?: string;
+  brand_values?: string[];
+  brand_key_people?: string[];
+
+  // Communication rules
+  brand_must_use?: string;
+  brand_must_avoid?: string;
 }
 
 export interface Brand extends BrandData {

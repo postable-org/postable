@@ -13,11 +13,11 @@ interface GenerationOverlayProps {
 }
 
 const STAGES = [
-  { id: "competitor-analysis", label: "Analisando concorrentes" },
   { id: "trend-analysis", label: "Identificando tendências" },
+  { id: "competitor-analysis", label: "Analisando concorrentes" },
   { id: "strategy", label: "Criando estratégia" },
-  { id: "image-generation", label: "Gerando imagem" },
   { id: "caption", label: "Escrevendo legenda" },
+  { id: "image-generation", label: "Gerando imagem" },
 ] as const;
 
 type StageId = (typeof STAGES)[number]["id"];
@@ -47,6 +47,13 @@ export function GenerationOverlay({
 }: GenerationOverlayProps) {
   const [completedStages, setCompletedStages] = useState<StageId[]>([]);
   const [activeStage, setActiveStage] = useState<StageId | null>(null);
+
+  useEffect(() => {
+    if (status === 'complete') {
+      setCompletedStages(STAGES.map((s) => s.id as StageId));
+      setActiveStage(null);
+    }
+  }, [status]);
 
   useEffect(() => {
     if (!stageState.stage) return;

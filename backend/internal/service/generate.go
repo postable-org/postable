@@ -54,8 +54,8 @@ func (s *GenerateService) StreamAndReturn(ctx context.Context, brandJSON string,
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	// Emit explicit stage visibility before content generation completes.
-	fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"competitor-analysis\",\"status\":\"started\"}\n\n")
+	// Emit the first real stage immediately so the UI shows something while Python boots.
+	fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"trend-analysis\",\"status\":\"started\"}\n\n")
 	flusher.Flush()
 
 	messageChan := make(chan string, 32)

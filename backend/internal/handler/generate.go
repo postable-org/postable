@@ -35,12 +35,26 @@ type QuotaChecker interface {
 
 // generateBusinessProfile mirrors the Python schema's business_profile block.
 type generateBusinessProfile struct {
-	Niche         string   `json:"niche"`
-	City          string   `json:"city"`
-	State         string   `json:"state"`
-	Tone          string   `json:"tone"`
-	BrandIdentity string   `json:"brand_identity"`
-	AssetURLs     []string `json:"asset_urls,omitempty"`
+	Niche                     string   `json:"niche"`
+	City                      string   `json:"city"`
+	State                     string   `json:"state"`
+	Tone                      string   `json:"tone"`
+	BrandIdentity             string   `json:"brand_identity"`
+	AssetURLs                 []string `json:"asset_urls,omitempty"`
+	BrandName                 string   `json:"brand_name,omitempty"`
+	BrandTagline              string   `json:"brand_tagline,omitempty"`
+	CompanyHistory            string   `json:"company_history,omitempty"`
+	BrandValues               []string `json:"brand_values,omitempty"`
+	BrandKeyPeople            []string `json:"brand_key_people,omitempty"`
+	BrandColors               []string `json:"brand_colors,omitempty"`
+	BrandFonts                []string `json:"brand_fonts,omitempty"`
+	DesignStyle               string   `json:"design_style,omitempty"`
+	TargetGender              string   `json:"target_gender,omitempty"`
+	TargetAgeMin              int      `json:"target_age_min,omitempty"`
+	TargetAgeMax              int      `json:"target_age_max,omitempty"`
+	TargetAudienceDescription string   `json:"target_audience_description,omitempty"`
+	BrandMustUse              string   `json:"brand_must_use,omitempty"`
+	BrandMustAvoid            string   `json:"brand_must_avoid,omitempty"`
 }
 
 // generateCampaignBrief mirrors the Python schema's campaign_brief block.
@@ -176,21 +190,40 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		themeHint = &prevTheme
 	}
 
+	toneStr := brand.ToneOfVoice
+	if brand.ToneCustom != "" {
+		toneStr = brand.ToneCustom
+	}
+
 	payload := generatePayload{
 		BusinessProfile: generateBusinessProfile{
-			Niche:         req.BusinessProfile.Niche,
-			City:          req.BusinessProfile.City,
-			State:         req.BusinessProfile.State,
-			Tone:          req.BusinessProfile.Tone,
-			BrandIdentity: req.BusinessProfile.BrandIdentity,
-			AssetURLs:     req.BusinessProfile.AssetURLs,
+			Niche:                     brand.Niche,
+			City:                      brand.City,
+			State:                     brand.State,
+			Tone:                      toneStr,
+			BrandIdentity:             buildBrandIdentity(brand),
+			AssetURLs:                 brand.AssetURLs,
+			BrandName:                 brand.Name,
+			BrandTagline:              brand.BrandTagline,
+			CompanyHistory:            brand.CompanyHistory,
+			BrandValues:               brand.BrandValues,
+			BrandKeyPeople:            brand.BrandKeyPeople,
+			BrandColors:               brand.BrandColors,
+			BrandFonts:                brand.BrandFonts,
+			DesignStyle:               brand.DesignStyle,
+			TargetGender:              brand.TargetGender,
+			TargetAgeMin:              brand.TargetAgeMin,
+			TargetAgeMax:              brand.TargetAgeMax,
+			TargetAudienceDescription: brand.TargetAudienceDescription,
+			BrandMustUse:              brand.BrandMustUse,
+			BrandMustAvoid:            brand.BrandMustAvoid,
 		},
 		CompetitorHandles: req.CompetitorHandles,
 		PostHistory:       req.PostHistory,
 		CampaignBrief: generateCampaignBrief{
 			Goal:           req.CampaignBrief.Goal,
 			TargetAudience: req.CampaignBrief.TargetAudience,
-			CTAChannel:     req.CampaignBrief.CTAChannel,
+			CTAChannel:     brand.CTAChannel,
 			ThemeHint:      themeHint,
 		},
 		Platform:  platform,
@@ -251,6 +284,63 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// buildBrandIdentity synthesizes a rich, structured brand identity string from all brand fields.
+// This is passed to the AI agent as context so it can generate highly personalized posts.
+func buildBrandIdentity(brand *service.Brand) string {
+	var parts []string
+
+	if brand.Name != "" {
+		parts = append(parts, "EMPRESA: "+brand.Name)
+	}
+	if brand.Niche != "" {
+		parts = append(parts, "SEGMENTO: "+brand.Niche)
+	}
+	if brand.BrandTagline != "" {
+		parts = append(parts, "TAGLINE: "+brand.BrandTagline)
+	}
+	if brand.CompanyHistory != "" {
+		parts = append(parts, "HISTÓRIA: "+brand.CompanyHistory)
+	}
+	if len(brand.BrandValues) > 0 {
+		parts = append(parts, "VALORES: "+strings.Join(brand.BrandValues, ", "))
+	}
+	if len(brand.BrandKeyPeople) > 0 {
+		parts = append(parts, "PESSOAS-CHAVE: "+strings.Join(brand.BrandKeyPeople, ", "))
+	}
+	if brand.TargetAudienceDescription != "" {
+		parts = append(parts, "PÚBLICO-ALVO: "+brand.TargetAudienceDescription)
+	}
+	if brand.TargetGender != "" && brand.TargetGender != "all" {
+		parts = append(parts, "GÊNERO DO PÚBLICO: "+brand.TargetGender)
+	}
+	if brand.TargetAgeMin > 0 || brand.TargetAgeMax > 0 {
+		parts = append(parts, fmt.Sprintf("FAIXA ETÁRIA: %d–%d anos", brand.TargetAgeMin, brand.TargetAgeMax))
+	}
+	if len(brand.BrandColors) > 0 {
+		parts = append(parts, "CORES DA MARCA: "+strings.Join(brand.BrandColors, ", "))
+	}
+	if len(brand.BrandFonts) > 0 {
+		parts = append(parts, "FONTES: "+strings.Join(brand.BrandFonts, ", "))
+	}
+	if brand.DesignStyle != "" {
+		parts = append(parts, "ESTILO VISUAL: "+brand.DesignStyle)
+	}
+	if brand.BrandMustUse != "" {
+		parts = append(parts, "SEMPRE INCLUIR: "+brand.BrandMustUse)
+	}
+	if brand.BrandMustAvoid != "" {
+		parts = append(parts, "NUNCA USAR: "+brand.BrandMustAvoid)
+	}
+	if brand.ContextJSON != "" {
+		parts = append(parts, "ATUALIZAÇÕES: "+brand.ContextJSON)
+	}
+
+	if len(parts) == 0 {
+		return brand.Name
+	}
+	return strings.Join(parts, "\n")
 }
 
 // processAgentImage detects image_base64 in responseJSON, uploads it to storage,

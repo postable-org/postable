@@ -74,7 +74,8 @@ export function GenerateButton({
           city: brand?.city ?? "",
           state: brand?.state ?? "",
           tone: brand?.tone_of_voice ?? "",
-          brand_identity: brand?.context_json ?? brand?.name ?? "",
+          // brand_identity is synthesized server-side from all brand context fields
+          brand_identity: brand?.name ?? "",
           asset_urls: brand?.asset_urls ?? [],
         },
         competitor_handles: competitorRes.competitors

@@ -182,6 +182,13 @@ export function useSSEGenerate(onComplete: (content: PostContent) => void): UseS
           return;
         }
 
+        if (parsed.event === 'done') {
+          setStatus('complete');
+          const final = finalResponseRef.current;
+          if (final) onCompleteRef.current(final);
+          return;
+        }
+
         if (parsed.event === 'result' || parsed.post_text !== undefined) {
           finalResponseRef.current = parsed as unknown as PostContent;
           setProgressMessage('Post gerado!');
