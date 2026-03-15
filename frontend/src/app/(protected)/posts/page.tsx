@@ -2,6 +2,7 @@
 
 import { GenerateButton } from "@/components/dashboard/GenerateButton";
 import { PostCard } from "@/components/dashboard/PostCard";
+import { XLogo } from "@/components/icons/XLogo";
 import type { Post, PostContent } from "@/lib/api/posts";
 import { getPosts } from "@/lib/api/posts";
 import {
@@ -12,8 +13,13 @@ import {
   Linkedin,
   List,
 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { XLogo } from "@/components/icons/XLogo";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 const PLATFORMS = [
   { id: "instagram", label: "Instagram", Icon: Instagram, color: "#E1306C" },
@@ -51,7 +57,6 @@ export default function PostsPage() {
       .catch(() => {});
   }, []);
 
-  // Slide the pill indicator to the active tab
   useLayoutEffect(() => {
     const activeIndex = PLATFORMS.findIndex((p) => p.id === activePlatform);
     const btn = tabRefs.current[activeIndex];
@@ -107,7 +112,6 @@ export default function PostsPage() {
     statusFilter === "all"
       ? posts
       : posts.filter((p) => p.status === statusFilter);
-
   const grouped = groupByDate(filteredPosts);
   const dates = Array.from(
     new Set(
@@ -116,29 +120,35 @@ export default function PostsPage() {
       ),
     ),
   );
-
   const activePlatformData = PLATFORMS.find((p) => p.id === activePlatform);
 
   return (
-    <div className="px-6 py-8 space-y-6 pb-24 md:pb-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1
-          className="text-3xl font-bold tracking-tight"
-          style={{ fontFamily: "var(--font-sans)" }}
-        >
-          Posts
-        </h1>
+    <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1
+            className="text-3xl font-bold tracking-tight"
+            style={{ fontFamily: "var(--font-sans)" }}
+          >
+            Posts
+          </h1>
+          <p
+            className="text-sm mt-1"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
+            Biblioteca de conteúdo gerado e histórico por plataforma.
+          </p>
+        </div>
         <GenerateButton onGenerated={handleGenerated} triggerRef={triggerRef} />
       </div>
 
-      {/* Platform tabs — sliding pill */}
+      {/* ── Platform tabs — sliding pill ── */}
       <div
         ref={tabsContainerRef}
         className="relative flex items-center gap-1 p-1 rounded-2xl overflow-x-auto"
         style={{ backgroundColor: "#f0ede7" }}
       >
-        {/* Sliding white pill */}
         <span
           aria-hidden
           style={{
@@ -151,17 +161,19 @@ export default function PostsPage() {
             backgroundColor: "#ffffff",
             borderRadius: 12,
             boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-            transition: "left 220ms cubic-bezier(0.4,0,0.2,1), width 220ms cubic-bezier(0.4,0,0.2,1), opacity 150ms ease",
+            transition:
+              "left 220ms cubic-bezier(0.4,0,0.2,1), width 220ms cubic-bezier(0.4,0,0.2,1), opacity 150ms ease",
             pointerEvents: "none",
           }}
         />
-
         {PLATFORMS.map(({ id, label, Icon, color }, index) => {
           const active = activePlatform === id;
           return (
             <button
               key={id}
-              ref={(el) => { tabRefs.current[index] = el; }}
+              ref={(el) => {
+                tabRefs.current[index] = el;
+              }}
               onClick={() => setActivePlatform(id)}
               className="relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium whitespace-nowrap shrink-0"
               style={{
@@ -185,9 +197,8 @@ export default function PostsPage() {
         })}
       </div>
 
-      {/* Filters + view toggle */}
+      {/* ── Filters + view toggle ── */}
       <div className="flex items-center justify-between gap-4">
-        {/* Status filter */}
         <div className="flex items-center gap-1">
           {(
             [
@@ -212,7 +223,6 @@ export default function PostsPage() {
           ))}
         </div>
 
-        {/* View mode */}
         <div
           className="flex items-center gap-0.5 p-1 rounded-xl"
           style={{ backgroundColor: "#f0ede7" }}
@@ -237,13 +247,14 @@ export default function PostsPage() {
         </div>
       </div>
 
-      {/* Platform note */}
+      {/* ── Platform hint — mesmo padrão de info banner do Contexto ── */}
       <div
-        className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
+        className="flex items-center gap-2 px-4 py-3 rounded-xl text-xs"
         style={{
-          backgroundColor: "#f0ede7",
-          color: "#8c8880",
+          backgroundColor: "rgba(166,200,249,0.1)",
+          border: "1px solid rgba(166,200,249,0.3)",
           fontFamily: "var(--font-body)",
+          color: "#8c8880",
         }}
       >
         <span>Posts otimizados para</span>
@@ -255,7 +266,7 @@ export default function PostsPage() {
         </span>
       </div>
 
-      {/* Posts */}
+      {/* ── Posts ── */}
       {filteredPosts.length === 0 ? (
         <div
           className="rounded-2xl p-14 text-center"

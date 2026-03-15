@@ -1,23 +1,27 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { getBrand, updateBrand, type BrandData } from "@/lib/api/brands";
 import {
-  Upload,
-  X,
-  ImageIcon,
-  FileVideo,
-  FileText,
-  Save,
+  getCompetitors,
+  updateCompetitors,
+  type CompetitorOperation,
+} from "@/lib/api/competitors";
+import {
+  AtSign,
+  Building2,
   ChevronDown,
   ChevronUp,
-  Sparkles,
-  AtSign,
-  Plus,
-  Building2,
+  FileText,
+  FileVideo,
+  ImageIcon,
   Loader2,
+  Plus,
+  Save,
+  Sparkles,
+  Upload,
+  X,
 } from "lucide-react";
-import { getBrand, updateBrand, type BrandData } from "@/lib/api/brands";
-import { getCompetitors, updateCompetitors, type CompetitorOperation } from "@/lib/api/competitors";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // ── Media Upload ─────────────────────────────────────────────────────────────
 
@@ -37,12 +41,20 @@ function getFileType(file: File): AssetType {
 }
 
 function MediaIcon({ type }: { type: AssetType }) {
-  if (type === "image") return <ImageIcon size={20} style={{ color: "#8c8880" }} />;
-  if (type === "video") return <FileVideo size={20} style={{ color: "#8c8880" }} />;
+  if (type === "image")
+    return <ImageIcon size={20} style={{ color: "#8c8880" }} />;
+  if (type === "video")
+    return <FileVideo size={20} style={{ color: "#8c8880" }} />;
   return <FileText size={20} style={{ color: "#8c8880" }} />;
 }
 
-function DropZone({ onFiles, disabled }: { onFiles: (files: File[]) => void; disabled?: boolean }) {
+function DropZone({
+  onFiles,
+  disabled,
+}: {
+  onFiles: (files: File[]) => void;
+  disabled?: boolean;
+}) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -54,13 +66,16 @@ function DropZone({ onFiles, disabled }: { onFiles: (files: File[]) => void; dis
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) onFiles(files);
     },
-    [onFiles, disabled]
+    [onFiles, disabled],
   );
 
   return (
     <div
       onDrop={handleDrop}
-      onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragging(true); }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!disabled) setDragging(true);
+      }}
       onDragLeave={() => setDragging(false)}
       onClick={() => !disabled && inputRef.current?.click()}
       className="rounded-2xl border-2 border-dashed p-10 text-center transition-all"
@@ -89,10 +104,16 @@ function DropZone({ onFiles, disabled }: { onFiles: (files: File[]) => void; dis
       >
         <Upload size={22} strokeWidth={1.8} style={{ color: "#0a0a0a" }} />
       </div>
-      <p className="font-semibold text-sm" style={{ fontFamily: "var(--font-sans)" }}>
+      <p
+        className="font-semibold text-sm"
+        style={{ fontFamily: "var(--font-sans)" }}
+      >
         Arraste arquivos aqui
       </p>
-      <p className="text-xs mt-1" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+      <p
+        className="text-xs mt-1"
+        style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+      >
         ou clique para selecionar — imagens, vídeos e documentos
       </p>
     </div>
@@ -105,41 +126,59 @@ const QUESTIONS = [
   {
     id: "week_update",
     label: "O que está acontecendo na sua empresa essa semana?",
-    placeholder: "Ex: Lançamos um novo produto, tivemos uma grande venda, estamos com promoção de aniversário...",
+    placeholder:
+      "Ex: Lançamos um novo produto, tivemos uma grande venda, estamos com promoção de aniversário...",
   },
   {
     id: "promotions",
     label: "Há alguma promoção ou oferta especial?",
-    placeholder: "Ex: 20% de desconto no mês de março, frete grátis acima de R$150...",
+    placeholder:
+      "Ex: 20% de desconto no mês de março, frete grátis acima de R$150...",
   },
   {
     id: "new_products",
     label: "Novos produtos ou serviços para anunciar?",
-    placeholder: "Ex: Acabamos de lançar nosso novo serviço de consultoria premium...",
+    placeholder:
+      "Ex: Acabamos de lançar nosso novo serviço de consultoria premium...",
   },
   {
     id: "monthly_goal",
     label: "Qual é o foco de marketing este mês?",
-    placeholder: "Ex: Aumentar seguidores no Instagram, converter mais leads, reativar clientes antigos...",
+    placeholder:
+      "Ex: Aumentar seguidores no Instagram, converter mais leads, reativar clientes antigos...",
   },
   {
     id: "tone_notes",
     label: "Algum contexto adicional para a IA considerar?",
-    placeholder: "Ex: Evite falar sobre preços na semana do dia das mães, foque em conteúdo emocional...",
+    placeholder:
+      "Ex: Evite falar sobre preços na semana do dia das mães, foque em conteúdo emocional...",
   },
 ];
 
 // ── Competitors ───────────────────────────────────────────────────────────────
 
-function CompetitorChip({ handle, onRemove }: { handle: string; onRemove: () => void }) {
+function CompetitorChip({
+  handle,
+  onRemove,
+}: {
+  handle: string;
+  onRemove: () => void;
+}) {
   return (
     <div
       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium"
-      style={{ backgroundColor: "#0a0a0a", color: "#f8f5ef", fontFamily: "var(--font-body)" }}
+      style={{
+        backgroundColor: "#0a0a0a",
+        color: "#f8f5ef",
+        fontFamily: "var(--font-body)",
+      }}
     >
       <AtSign size={12} />
       <span>{handle.replace(/^@/, "")}</span>
-      <button onClick={onRemove} className="opacity-60 hover:opacity-100 transition-opacity">
+      <button
+        onClick={onRemove}
+        className="opacity-60 hover:opacity-100 transition-opacity"
+      >
         <X size={12} strokeWidth={2.5} />
       </button>
     </div>
@@ -181,11 +220,17 @@ function Section({
             <Icon size={18} strokeWidth={1.8} style={{ color: "#0a0a0a" }} />
           </div>
           <div>
-            <p className="font-semibold text-sm" style={{ fontFamily: "var(--font-sans)" }}>
+            <p
+              className="font-semibold text-sm"
+              style={{ fontFamily: "var(--font-sans)" }}
+            >
               {title}
             </p>
             {subtitle && (
-              <p className="text-xs" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+              <p
+                className="text-xs"
+                style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+              >
                 {subtitle}
               </p>
             )}
@@ -199,7 +244,10 @@ function Section({
       </button>
 
       {open && (
-        <div className="px-6 pb-6 space-y-4" style={{ borderTop: "1px solid #e4e0d8" }}>
+        <div
+          className="px-6 pb-6 space-y-4"
+          style={{ borderTop: "1px solid #e4e0d8" }}
+        >
           <div className="pt-4">{children}</div>
         </div>
       )}
@@ -274,9 +322,14 @@ export default function ContextPage() {
           });
           if (brand.context_json) {
             try {
-              const saved = JSON.parse(brand.context_json) as Record<string, string>;
+              const saved = JSON.parse(brand.context_json) as Record<
+                string,
+                string
+              >;
               setAnswers(saved);
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
           }
           if (brand.asset_urls && brand.asset_urls.length > 0) {
             setAssetURLs(brand.asset_urls);
@@ -300,7 +353,7 @@ export default function ContextPage() {
         form.append("file", file);
         const res = await fetch("/api/upload", { method: "POST", body: form });
         if (!res.ok) throw new Error("upload failed");
-        const json = await res.json() as { url: string };
+        const json = (await res.json()) as { url: string };
         uploaded.push(json.url);
       }
       setAssetURLs((prev) => [...prev, ...uploaded]);
@@ -326,7 +379,7 @@ export default function ContextPage() {
       setCompetitors(
         res.competitors
           .filter((c) => c.status === "active")
-          .map((c) => c.handle)
+          .map((c) => c.handle),
       );
     } catch {
       // revert optimistically if needed — do nothing for now
@@ -342,7 +395,7 @@ export default function ContextPage() {
       setCompetitors(
         res.competitors
           .filter((c) => c.status === "active")
-          .map((c) => c.handle)
+          .map((c) => c.handle),
       );
     } catch {
       // ignore
@@ -358,7 +411,8 @@ export default function ContextPage() {
       // Save brand (including asset_urls)
       await updateBrand({
         ...brandForm,
-        context_json: Object.keys(answers).length > 0 ? JSON.stringify(answers) : undefined,
+        context_json:
+          Object.keys(answers).length > 0 ? JSON.stringify(answers) : undefined,
         asset_urls: assetURLs,
       });
 
@@ -388,7 +442,7 @@ export default function ContextPage() {
   };
 
   return (
-    <div className="px-6 py-8 space-y-5 pb-24 md:pb-8">
+    <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
@@ -398,14 +452,18 @@ export default function ContextPage() {
           >
             Contexto da Empresa
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
-            A IA usa essas informações para criar posts mais precisos e relevantes.
+          <p
+            className="text-sm mt-1"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
+            A IA usa essas informações para criar posts mais precisos e
+            relevantes.
           </p>
         </div>
         <button
           onClick={handleSave}
           disabled={brandSaving || brandLoading}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold shrink-0 transition-all disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium shrink-0 transition-all disabled:opacity-50"
           style={{
             backgroundColor: brandSaved ? "#10B981" : "#0a0a0a",
             color: "#f8f5ef",
@@ -413,11 +471,15 @@ export default function ContextPage() {
           }}
         >
           {brandSaving ? (
-            <><Loader2 size={14} className="animate-spin" /> Salvando...</>
+            <>
+              <Loader2 size={14} className="animate-spin" /> Salvando...
+            </>
           ) : brandSaved ? (
             <>✓ Salvo!</>
           ) : (
-            <><Save size={14} /> Salvar contexto</>
+            <>
+              <Save size={14} /> Salvar contexto
+            </>
           )}
         </button>
       </div>
@@ -425,7 +487,11 @@ export default function ContextPage() {
       {brandError && (
         <div
           className="rounded-xl px-4 py-3 text-sm"
-          style={{ backgroundColor: "#fde8e8", color: "#b91c1c", fontFamily: "var(--font-body)" }}
+          style={{
+            backgroundColor: "#fde8e8",
+            color: "#b91c1c",
+            fontFamily: "var(--font-body)",
+          }}
         >
           {brandError}
         </div>
@@ -434,12 +500,23 @@ export default function ContextPage() {
       {/* AI hint */}
       <div
         className="flex items-start gap-3 px-4 py-3 rounded-xl"
-        style={{ backgroundColor: "rgba(166,200,249,0.1)", border: "1px solid rgba(166,200,249,0.3)" }}
+        style={{
+          backgroundColor: "rgba(166,200,249,0.1)",
+          border: "1px solid rgba(166,200,249,0.3)",
+        }}
       >
-        <Sparkles size={16} style={{ color: "#a6c8f9", marginTop: 1 }} className="shrink-0" />
-        <p className="text-xs leading-relaxed" style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}>
-          Quanto mais contexto você fornecer, mais personalizados serão seus posts. A IA considera
-          eventos, promoções e objetivos para criar conteúdo estratégico.
+        <Sparkles
+          size={16}
+          style={{ color: "#a6c8f9", marginTop: 1 }}
+          className="shrink-0"
+        />
+        <p
+          className="text-xs leading-relaxed"
+          style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
+        >
+          Quanto mais contexto você fornecer, mais personalizados serão seus
+          posts. A IA considera eventos, promoções e objetivos para criar
+          conteúdo estratégico.
         </p>
       </div>
 
@@ -450,20 +527,28 @@ export default function ContextPage() {
         icon={Building2}
       >
         {brandLoading ? (
-          <div className="flex items-center gap-2 text-sm" style={{ color: "#8c8880" }}>
+          <div
+            className="flex items-center gap-2 text-sm"
+            style={{ color: "#8c8880" }}
+          >
             <Loader2 size={14} className="animate-spin" /> Carregando...
           </div>
         ) : (
           <div className="space-y-4">
             {/* Company name */}
             <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+              <label
+                className="block text-sm font-medium mb-1.5"
+                style={{ fontFamily: "var(--font-body)" }}
+              >
                 Nome da empresa
               </label>
               <input
                 type="text"
                 value={brandForm.name ?? ""}
-                onChange={(e) => setBrandForm((p) => ({ ...p, name: e.target.value }))}
+                onChange={(e) =>
+                  setBrandForm((p) => ({ ...p, name: e.target.value }))
+                }
                 placeholder="Ex: Padaria do João"
                 className="w-full rounded-xl px-4 py-3 text-sm outline-none focus:border-black"
                 style={{ ...inputStyle, border: "1px solid #e4e0d8" }}
@@ -472,13 +557,18 @@ export default function ContextPage() {
 
             {/* Niche */}
             <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+              <label
+                className="block text-sm font-medium mb-1.5"
+                style={{ fontFamily: "var(--font-body)" }}
+              >
                 Nicho / Segmento
               </label>
               <input
                 type="text"
                 value={brandForm.niche}
-                onChange={(e) => setBrandForm((p) => ({ ...p, niche: e.target.value }))}
+                onChange={(e) =>
+                  setBrandForm((p) => ({ ...p, niche: e.target.value }))
+                }
                 placeholder="Ex: Padaria artesanal, Clínica odontológica, Pet shop..."
                 className="w-full rounded-xl px-4 py-3 text-sm outline-none"
                 style={{ ...inputStyle, border: "1px solid #e4e0d8" }}
@@ -488,26 +578,36 @@ export default function ContextPage() {
             {/* City / State */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+                <label
+                  className="block text-sm font-medium mb-1.5"
+                  style={{ fontFamily: "var(--font-body)" }}
+                >
                   Cidade
                 </label>
                 <input
                   type="text"
                   value={brandForm.city}
-                  onChange={(e) => setBrandForm((p) => ({ ...p, city: e.target.value }))}
+                  onChange={(e) =>
+                    setBrandForm((p) => ({ ...p, city: e.target.value }))
+                  }
                   placeholder="São Paulo"
                   className="w-full rounded-xl px-4 py-3 text-sm outline-none"
                   style={{ ...inputStyle, border: "1px solid #e4e0d8" }}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+                <label
+                  className="block text-sm font-medium mb-1.5"
+                  style={{ fontFamily: "var(--font-body)" }}
+                >
                   Estado
                 </label>
                 <input
                   type="text"
                   value={brandForm.state}
-                  onChange={(e) => setBrandForm((p) => ({ ...p, state: e.target.value }))}
+                  onChange={(e) =>
+                    setBrandForm((p) => ({ ...p, state: e.target.value }))
+                  }
                   placeholder="SP"
                   className="w-full rounded-xl px-4 py-3 text-sm outline-none"
                   style={{ ...inputStyle, border: "1px solid #e4e0d8" }}
@@ -517,7 +617,10 @@ export default function ContextPage() {
 
             {/* Tone of voice */}
             <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+              <label
+                className="block text-sm font-medium mb-1.5"
+                style={{ fontFamily: "var(--font-body)" }}
+              >
                 Tom de voz
               </label>
               <div className="flex flex-wrap gap-2">
@@ -525,11 +628,19 @@ export default function ContextPage() {
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setBrandForm((p) => ({ ...p, tone_of_voice: opt.value }))}
+                    onClick={() =>
+                      setBrandForm((p) => ({ ...p, tone_of_voice: opt.value }))
+                    }
                     className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
                     style={{
-                      backgroundColor: brandForm.tone_of_voice === opt.value ? "#0a0a0a" : "#f0ede7",
-                      color: brandForm.tone_of_voice === opt.value ? "#f8f5ef" : "#0a0a0a",
+                      backgroundColor:
+                        brandForm.tone_of_voice === opt.value
+                          ? "#0a0a0a"
+                          : "#f0ede7",
+                      color:
+                        brandForm.tone_of_voice === opt.value
+                          ? "#f8f5ef"
+                          : "#0a0a0a",
                       fontFamily: "var(--font-body)",
                     }}
                   >
@@ -541,7 +652,9 @@ export default function ContextPage() {
                 <input
                   type="text"
                   value={brandForm.tone_custom ?? ""}
-                  onChange={(e) => setBrandForm((p) => ({ ...p, tone_custom: e.target.value }))}
+                  onChange={(e) =>
+                    setBrandForm((p) => ({ ...p, tone_custom: e.target.value }))
+                  }
                   placeholder="Descreva o tom de voz"
                   className="mt-2 w-full rounded-xl px-4 py-3 text-sm outline-none"
                   style={{ ...inputStyle, border: "1px solid #e4e0d8" }}
@@ -551,7 +664,10 @@ export default function ContextPage() {
 
             {/* CTA Channel */}
             <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ fontFamily: "var(--font-body)" }}>
+              <label
+                className="block text-sm font-medium mb-1.5"
+                style={{ fontFamily: "var(--font-body)" }}
+              >
                 Canal de CTA principal
               </label>
               <div className="flex gap-2">
@@ -559,11 +675,22 @@ export default function ContextPage() {
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setBrandForm((p) => ({ ...p, cta_channel: opt.value as BrandData["cta_channel"] }))}
+                    onClick={() =>
+                      setBrandForm((p) => ({
+                        ...p,
+                        cta_channel: opt.value as BrandData["cta_channel"],
+                      }))
+                    }
                     className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
                     style={{
-                      backgroundColor: brandForm.cta_channel === opt.value ? "#0a0a0a" : "#f0ede7",
-                      color: brandForm.cta_channel === opt.value ? "#f8f5ef" : "#0a0a0a",
+                      backgroundColor:
+                        brandForm.cta_channel === opt.value
+                          ? "#0a0a0a"
+                          : "#f0ede7",
+                      color:
+                        brandForm.cta_channel === opt.value
+                          ? "#f8f5ef"
+                          : "#0a0a0a",
                       fontFamily: "var(--font-body)",
                     }}
                   >
@@ -586,7 +713,10 @@ export default function ContextPage() {
         <DropZone onFiles={handleFiles} disabled={uploadingFile} />
 
         {uploadingFile && (
-          <div className="flex items-center gap-2 text-sm mt-3" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+          <div
+            className="flex items-center gap-2 text-sm mt-3"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
             <Loader2 size={14} className="animate-spin" /> Enviando arquivo...
           </div>
         )}
@@ -594,7 +724,11 @@ export default function ContextPage() {
         {uploadError && (
           <div
             className="rounded-xl px-4 py-3 text-sm mt-3"
-            style={{ backgroundColor: "#fde8e8", color: "#b91c1c", fontFamily: "var(--font-body)" }}
+            style={{
+              backgroundColor: "#fde8e8",
+              color: "#b91c1c",
+              fontFamily: "var(--font-body)",
+            }}
           >
             {uploadError}
           </div>
@@ -612,7 +746,11 @@ export default function ContextPage() {
                 >
                   {type === "image" ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={url} alt="asset" className="w-full h-full object-cover" />
+                    <img
+                      src={url}
+                      alt="asset"
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <div
                       className="w-full h-full flex flex-col items-center justify-center gap-2"
@@ -621,7 +759,10 @@ export default function ContextPage() {
                       <MediaIcon type={type} />
                       <p
                         className="text-xs px-2 text-center truncate w-full"
-                        style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+                        style={{
+                          color: "#8c8880",
+                          fontFamily: "var(--font-body)",
+                        }}
                       >
                         {url.split("/").pop()?.split("?")[0] ?? "arquivo"}
                       </p>
@@ -660,9 +801,14 @@ export default function ContextPage() {
                 rows={3}
                 placeholder={placeholder}
                 value={answers[id] ?? ""}
-                onChange={(e) => setAnswers((prev) => ({ ...prev, [id]: e.target.value }))}
+                onChange={(e) =>
+                  setAnswers((prev) => ({ ...prev, [id]: e.target.value }))
+                }
                 className="w-full rounded-xl border bg-[#f8f5ef] px-4 py-3 text-sm outline-none transition-all focus:border-foreground focus:ring-2 focus:ring-foreground/10 resize-none placeholder:text-muted-foreground"
-                style={{ borderColor: "#e4e0d8", fontFamily: "var(--font-body)" }}
+                style={{
+                  borderColor: "#e4e0d8",
+                  fontFamily: "var(--font-body)",
+                }}
               />
             </div>
           ))}
@@ -681,7 +827,11 @@ export default function ContextPage() {
             className="flex items-center gap-2 rounded-xl border bg-[#f8f5ef] px-4 py-2.5 focus-within:border-foreground focus-within:ring-2 focus-within:ring-foreground/10 transition-all"
             style={{ borderColor: "#e4e0d8" }}
           >
-            <AtSign size={15} style={{ color: "#8c8880" }} className="shrink-0" />
+            <AtSign
+              size={15}
+              style={{ color: "#8c8880" }}
+              className="shrink-0"
+            />
             <input
               type="text"
               value={competitorInput}
@@ -703,7 +853,11 @@ export default function ContextPage() {
               className="w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-30"
               style={{ backgroundColor: "#0a0a0a", color: "#f8f5ef" }}
             >
-              {competitorLoading ? <Loader2 size={12} className="animate-spin" /> : <Plus size={14} strokeWidth={2.5} />}
+              {competitorLoading ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Plus size={14} strokeWidth={2.5} />
+              )}
             </button>
           </div>
 
@@ -718,7 +872,10 @@ export default function ContextPage() {
               ))}
             </div>
           ) : (
-            <p className="text-xs" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+            <p
+              className="text-xs"
+              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+            >
               Adicione os @ dos seus concorrentes no Instagram.
             </p>
           )}

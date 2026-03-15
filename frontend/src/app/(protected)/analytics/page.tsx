@@ -75,25 +75,17 @@ function formatDateTime(value: string) {
 }
 
 function formatPlatform(value: string) {
-  switch (value) {
-    case "instagram":
-      return "Instagram";
-    case "linkedin":
-      return "LinkedIn";
-    case "facebook":
-      return "Facebook";
-    case "x":
-      return "X";
-    default:
-      return value;
-  }
+  const map: Record<string, string> = {
+    instagram: "Instagram",
+    linkedin: "LinkedIn",
+    facebook: "Facebook",
+    x: "X",
+  };
+  return map[value] ?? value;
 }
 
 function truncateText(value: string, limit = 90) {
-  if (value.length <= limit) {
-    return value;
-  }
-  return `${value.slice(0, limit - 1)}…`;
+  return value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
 }
 
 function TrendBadge({ value }: { value: number }) {
@@ -257,11 +249,11 @@ function ErrorState({
   return (
     <div
       className="rounded-2xl p-6 flex items-center justify-between gap-4"
-      style={{ backgroundColor: "#fff6f6", border: "1px solid #f3d7d7" }}
+      style={{ backgroundColor: "#fde8e8", border: "1px solid #f5c2c2" }}
     >
       <div className="flex items-center gap-3">
         <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center"
+          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
           style={{ backgroundColor: "rgba(225,48,108,0.1)" }}
         >
           <AlertCircle
@@ -288,7 +280,7 @@ function ErrorState({
       <button
         type="button"
         onClick={onRetry}
-        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium"
+        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium shrink-0"
         style={{
           backgroundColor: "#0a0a0a",
           color: "#f8f5ef",
@@ -308,31 +300,22 @@ function AnalyticsChart({ data }: { data: AnalyticsDailyPoint[] }) {
   const paddingX = 18;
   const paddingTop = 14;
   const paddingBottom = 26;
-  const maxValue = Math.max(
-    ...data.flatMap((point) => [point.reach, point.engagement]),
-    0,
-  );
-
-  if (maxValue === 0) {
-    return <ChartPlaceholder height={height} />;
-  }
-
+  const maxValue = Math.max(...data.flatMap((p) => [p.reach, p.engagement]), 0);
+  if (maxValue === 0) return <ChartPlaceholder height={height} />;
   const graphWidth = width - paddingX * 2;
   const graphHeight = height - paddingTop - paddingBottom;
   const denominator = data.length > 1 ? data.length - 1 : 1;
-  const xFor = (index: number) => paddingX + (graphWidth * index) / denominator;
-  const yFor = (value: number) =>
-    paddingTop + graphHeight - (value / maxValue) * graphHeight;
-
+  const xFor = (i: number) => paddingX + (graphWidth * i) / denominator;
+  const yFor = (v: number) =>
+    paddingTop + graphHeight - (v / maxValue) * graphHeight;
   const reachPoints = data
-    .map((point, index) => `${xFor(index)},${yFor(point.reach)}`)
+    .map((p, i) => `${xFor(i)},${yFor(p.reach)}`)
     .join(" ");
   const engagementPoints = data
-    .map((point, index) => `${xFor(index)},${yFor(point.engagement)}`)
+    .map((p, i) => `${xFor(i)},${yFor(p.engagement)}`)
     .join(" ");
   const reachArea = `${reachPoints} ${xFor(data.length - 1)},${height - paddingBottom} ${xFor(0)},${height - paddingBottom}`;
   const step = Math.max(Math.floor(data.length / 5), 1);
-
   return (
     <div
       className="w-full overflow-hidden rounded-xl"
@@ -417,11 +400,7 @@ function PlatformBreakdown({
 }: {
   platforms: AnalyticsPlatformStat[];
 }) {
-  const maxValue = Math.max(
-    ...platforms.map((platform) => platform.posts || platform.reach),
-    1,
-  );
-
+  const maxValue = Math.max(...platforms.map((p) => p.posts || p.reach), 1);
   return (
     <div className="flex flex-col gap-0">
       {platforms.map((platform, index) => {
@@ -511,7 +490,6 @@ function BreakdownCards({
       value: breakdown.followers_reached,
     },
   ];
-
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {items.map(({ label, Icon, color, value }) => (
@@ -567,16 +545,12 @@ function PostsTable({
     "Shares",
     "Eng. Rate",
   ];
-
   return (
     <div
       className="rounded-2xl overflow-hidden"
       style={{ border: "1.5px solid #e4e0d8" }}
     >
-      <div
-        className="px-6 py-4 flex items-center justify-between"
-        style={{ borderBottom: "1px solid #e4e0d8" }}
-      >
+      <div className="px-6 py-5" style={{ borderBottom: "1px solid #e4e0d8" }}>
         <h2
           className="text-sm font-semibold"
           style={{ fontFamily: "var(--font-sans)" }}
@@ -584,7 +558,6 @@ function PostsTable({
           Posts com melhor performance
         </h2>
       </div>
-
       <div
         className="hidden sm:grid px-6 py-2.5"
         style={{
@@ -594,17 +567,16 @@ function PostsTable({
         }}
       >
         {posts.length > 0 &&
-          headers.map((header) => (
+          headers.map((h) => (
             <span
-              key={header}
+              key={h}
               className="text-[10px] font-semibold uppercase tracking-wider"
               style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
             >
-              {header}
+              {h}
             </span>
           ))}
       </div>
-
       {loading ? (
         <div className="p-6 space-y-3">
           <Skeleton className="w-full h-14" />
@@ -620,8 +592,8 @@ function PostsTable({
           }
           description={
             connected
-              ? "Publique posts nas redes conectadas para começar a comparar resultados por plataforma."
-              : "Conecte suas contas de redes sociais e publique conteúdos para começar a ver métricas reais."
+              ? "Publique posts nas redes conectadas para começar a comparar resultados."
+              : "Conecte suas contas e publique conteúdos para ver métricas reais."
           }
           href={connected ? "/social" : "/settings"}
           cta={connected ? "Abrir social" : "Conectar contas"}
@@ -649,30 +621,17 @@ function PostsTable({
                   {post.format} • {formatDateTime(post.date)}
                 </p>
               </div>
-              <span
-                className="text-xs sm:text-[12px]"
-                style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
-              >
-                {formatCompactNumber(post.reach)}
-              </span>
-              <span
-                className="text-xs sm:text-[12px]"
-                style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
-              >
-                {formatCompactNumber(post.likes)}
-              </span>
-              <span
-                className="text-xs sm:text-[12px]"
-                style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
-              >
-                {formatCompactNumber(post.comments)}
-              </span>
-              <span
-                className="text-xs sm:text-[12px]"
-                style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
-              >
-                {formatCompactNumber(post.shares)}
-              </span>
+              {[post.reach, post.likes, post.comments, post.shares].map(
+                (v, i) => (
+                  <span
+                    key={i}
+                    className="text-xs sm:text-[12px]"
+                    style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
+                  >
+                    {formatCompactNumber(v)}
+                  </span>
+                ),
+              )}
               <span
                 className="text-xs sm:text-[12px]"
                 style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
@@ -694,7 +653,6 @@ export default function AnalyticsPage() {
     queryFn: () => getAnalytics(range),
     staleTime: 60_000,
   });
-
   const refreshMutation = useMutation({
     mutationFn: refreshInsights,
     onSuccess: () => void refetch(),
@@ -713,9 +671,7 @@ export default function AnalyticsPage() {
   };
 
   const miniStats = useMemo(() => {
-    if (!analytics) {
-      return [] as string[];
-    }
+    if (!analytics) return [] as string[];
     return [
       `${analytics.overview.connected_accounts} conta${analytics.overview.connected_accounts === 1 ? "" : "s"} conectada${analytics.overview.connected_accounts === 1 ? "" : "s"}`,
       `${analytics.overview.scheduled_posts} agendada${analytics.overview.scheduled_posts === 1 ? "" : "s"}`,
@@ -725,6 +681,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1
@@ -758,7 +715,8 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Ações do header — mesmo padrão do botão "Salvar contexto" */}
+        <div className="flex items-center gap-2 shrink-0">
           {(isFetching && !isLoading) || refreshMutation.isPending ? (
             <span
               className="text-[11px]"
@@ -773,17 +731,18 @@ export default function AnalyticsPage() {
             type="button"
             onClick={() => refreshMutation.mutate()}
             disabled={refreshMutation.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
             style={{
               backgroundColor: "#f0ede7",
               color: "#0a0a0a",
               fontFamily: "var(--font-body)",
-              opacity: refreshMutation.isPending ? 0.6 : 1,
             }}
           >
-            <RefreshCcw size={11} strokeWidth={2} />
+            <RefreshCcw size={14} strokeWidth={2} />
             Atualizar métricas
           </button>
+
+          {/* Range selector — mesmo padrão pill */}
           <div
             className="flex items-center gap-0.5 p-1 rounded-xl"
             style={{ backgroundColor: "#f0ede7" }}
@@ -817,15 +776,18 @@ export default function AnalyticsPage() {
       {!isLoading && !isConnected ? (
         <div
           className="flex items-center justify-between gap-4 px-5 py-4 rounded-2xl"
-          style={{ backgroundColor: "#f0ede7", border: "1px solid #e4e0d8" }}
+          style={{
+            backgroundColor: "rgba(166,200,249,0.1)",
+            border: "1px solid rgba(166,200,249,0.3)",
+          }}
         >
           <div className="flex items-center gap-3">
             <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-              style={{ backgroundColor: "#e4e0d8" }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+              style={{ backgroundColor: "#f0ede7" }}
             >
               <TrendingUp
-                size={15}
+                size={18}
                 strokeWidth={1.8}
                 style={{ color: "#8c8880" }}
               />
@@ -848,7 +810,7 @@ export default function AnalyticsPage() {
           </div>
           <Link
             href="/settings"
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
             style={{
               backgroundColor: "#0a0a0a",
               color: "#f8f5ef",
@@ -861,6 +823,7 @@ export default function AnalyticsPage() {
         </div>
       ) : null}
 
+      {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           label="Alcance total"
@@ -899,6 +862,7 @@ export default function AnalyticsPage() {
         />
       </div>
 
+      {/* Chart + platform breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div
           className="lg:col-span-2 rounded-2xl p-6"
@@ -970,7 +934,6 @@ export default function AnalyticsPage() {
       </div>
 
       <BreakdownCards breakdown={breakdown} loading={isLoading} />
-
       <PostsTable
         posts={topPosts}
         loading={isLoading}

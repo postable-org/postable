@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { getPosts, updatePostStatus } from "@/lib/api/posts";
-import type { Post, PostContent } from "@/lib/api/posts";
 import { GenerateButton } from "@/components/dashboard/GenerateButton";
 import { PostCard } from "@/components/dashboard/PostCard";
-import { PostReview } from "@/components/generate/PostReview";
 import { GenerationOverlay } from "@/components/generate/GenerationOverlay";
+import { PostReview } from "@/components/generate/PostReview";
+import type { Post, PostContent } from "@/lib/api/posts";
+import { getPosts, updatePostStatus } from "@/lib/api/posts";
 import { usePlatform } from "@/lib/context/PlatformContext";
 import type { SSEStatus, StageState } from "@/lib/hooks/useSSEGenerate";
-import { Calendar, Zap, Clock, CheckCircle, TrendingUp } from "lucide-react";
-
-// ── Stat Card ─────────────────────────────────────────────────────────────────
+import { Calendar, CheckCircle, Clock, TrendingUp, Zap } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 function StatCard({
   label,
@@ -33,7 +31,11 @@ function StatCard({
         className="w-9 h-9 rounded-xl flex items-center justify-center"
         style={{ backgroundColor: accent ? `${accent}15` : "#f0ede7" }}
       >
-        <Icon size={18} strokeWidth={1.8} style={{ color: accent ?? "#0a0a0a" }} />
+        <Icon
+          size={18}
+          strokeWidth={1.8}
+          style={{ color: accent ?? "#0a0a0a" }}
+        />
       </div>
       <div>
         <p
@@ -42,15 +44,16 @@ function StatCard({
         >
           {value}
         </p>
-        <p className="text-xs mt-0.5" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+        <p
+          className="text-xs mt-0.5"
+          style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+        >
           {label}
         </p>
       </div>
     </div>
   );
 }
-
-// ── Dashboard Page ─────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { platform } = usePlatform();
@@ -60,9 +63,12 @@ export default function DashboardPage() {
   const triggerGenerateRef = useRef<(() => void) | null>(null);
   const resetGenerateRef = useRef<(() => void) | null>(null);
 
-  // Generation overlay state
   const [genStatus, setGenStatus] = useState<SSEStatus>("idle");
-  const [genStage, setGenStage] = useState<StageState>({ stage: null, status: null, message: "" });
+  const [genStage, setGenStage] = useState<StageState>({
+    stage: null,
+    status: null,
+    message: "",
+  });
   const [genMessage, setGenMessage] = useState("");
 
   const handleGenStatusChange = useCallback(
@@ -71,7 +77,7 @@ export default function DashboardPage() {
       setGenStage(stageState);
       setGenMessage(progressMessage);
     },
-    []
+    [],
   );
 
   const handleCancelGeneration = useCallback(() => {
@@ -87,12 +93,10 @@ export default function DashboardPage() {
       .catch(() => {});
   }, []);
 
-  // Called when generation completes → show review overlay
   const handleGenerated = useCallback((content: PostContent) => {
     setReviewContent(content);
   }, []);
 
-  // User clicked "Salvar para depois" in review
   const handleSavePost = useCallback(async (content: PostContent) => {
     setReviewContent(null);
     const optimistic: Post = {
@@ -118,13 +122,10 @@ export default function DashboardPage() {
     } catch {}
   }, []);
 
-  // User clicked "Publicar" in review
   const handlePublishPost = useCallback(async (content: PostContent) => {
     setReviewContent(null);
-    // Optimistically add as pending, then immediately approve
-    const tempId = Date.now().toString();
     const optimistic: Post = {
-      id: tempId,
+      id: Date.now().toString(),
       user_id: "",
       brand_id: "",
       status: "pending",
@@ -143,32 +144,29 @@ export default function DashboardPage() {
     try {
       const fresh = await getPosts();
       setPosts(fresh);
-      // Approve the first pending post (the one just created)
       const created = fresh.find((p) => p.status === "pending");
       if (created) {
         await updatePostStatus(created.id, "approved");
         setPosts((prev) =>
           prev.map((p) =>
-            p.id === created.id ? { ...p, status: "approved" } : p
-          )
+            p.id === created.id ? { ...p, status: "approved" } : p,
+          ),
         );
       }
     } catch {}
-  }, []);
-
-  const handleCancelReview = useCallback(() => {
-    setReviewContent(null);
   }, []);
 
   const handleStatusChange = useCallback(
     (id: string, status: "approved" | "rejected") => {
       setPosts((prev) =>
         prev.map((p) =>
-          p.id === id ? { ...p, status, updated_at: new Date().toISOString() } : p
-        )
+          p.id === id
+            ? { ...p, status, updated_at: new Date().toISOString() }
+            : p,
+        ),
       );
     },
-    []
+    [],
   );
 
   const handleRegenerate = useCallback((id: string) => {
@@ -186,7 +184,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* Generation progress overlay */}
       <GenerationOverlay
         status={genStatus}
         stageState={genStage}
@@ -194,19 +191,17 @@ export default function DashboardPage() {
         platform={platform}
         onCancel={handleCancelGeneration}
       />
-
-      {/* Review overlay — appears after generation */}
       {reviewContent && (
         <PostReview
           content={reviewContent}
           onSave={handleSavePost}
           onPublish={handlePublishPost}
-          onCancel={handleCancelReview}
+          onCancel={() => setReviewContent(null)}
         />
       )}
 
-      <div className="px-6 py-8 space-y-8 pb-24 md:pb-8">
-        {/* Header */}
+      <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+        {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <p
@@ -223,7 +218,7 @@ export default function DashboardPage() {
             </h1>
           </div>
 
-          {/* Mode toggle */}
+          {/* Toggle de modo — mesmo padrão pill */}
           <div
             className="flex items-center gap-0.5 p-1 rounded-xl"
             style={{ backgroundColor: "#f0ede7" }}
@@ -251,30 +246,43 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Stats */}
+        {/* ── Stat cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Pendentes" value={pendingPosts.length} icon={Clock} accent="#F59E0B" />
-          <StatCard label="Aprovados" value={approvedPosts.length} icon={CheckCircle} accent="#10B981" />
-          <StatCard label="Total de posts" value={posts.length} icon={TrendingUp} />
+          <StatCard
+            label="Pendentes"
+            value={pendingPosts.length}
+            icon={Clock}
+            accent="#F59E0B"
+          />
+          <StatCard
+            label="Aprovados"
+            value={approvedPosts.length}
+            icon={CheckCircle}
+            accent="#10B981"
+          />
+          <StatCard
+            label="Total de posts"
+            value={posts.length}
+            icon={TrendingUp}
+          />
           <StatCard
             label="Esta semana"
             value={
-              posts.filter((p) => {
-                const d = new Date(p.created_at);
-                const now = new Date();
-                return now.getTime() - d.getTime() < 7 * 24 * 60 * 60 * 1000;
-              }).length
+              posts.filter(
+                (p) =>
+                  Date.now() - new Date(p.created_at).getTime() <
+                  7 * 24 * 60 * 60 * 1000,
+              ).length
             }
             icon={Calendar}
           />
         </div>
 
-        {/* Main area */}
+        {/* ── Main area ── */}
         {mode === "quick" ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: Generate + pending */}
             <div className="lg:col-span-2 space-y-5">
-              {/* Generate card */}
+              {/* Generate card — dark inversion mantida para destaque */}
               <div
                 className="rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                 style={{ backgroundColor: "#0a0a0a" }}
@@ -288,7 +296,10 @@ export default function DashboardPage() {
                   </p>
                   <p
                     className="text-xs mt-1"
-                    style={{ color: "rgba(248,245,239,0.45)", fontFamily: "var(--font-body)" }}
+                    style={{
+                      color: "rgba(248,245,239,0.45)",
+                      fontFamily: "var(--font-body)",
+                    }}
                   >
                     A IA analisa seus concorrentes e cria conteúdo otimizado.
                   </p>
@@ -302,11 +313,10 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* Pending posts */}
               {pendingPosts.length > 0 && (
                 <div className="space-y-3">
                   <h2
-                    className="text-sm font-semibold uppercase tracking-wider"
+                    className="text-xs font-semibold uppercase tracking-wider"
                     style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
                   >
                     Aguardando aprovação ({pendingPosts.length})
@@ -348,10 +358,10 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Right: Approved */}
+            {/* Approved column */}
             <div className="space-y-4">
               <h2
-                className="text-sm font-semibold uppercase tracking-wider"
+                className="text-xs font-semibold uppercase tracking-wider"
                 style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
               >
                 Posts aprovados
@@ -359,15 +369,18 @@ export default function DashboardPage() {
               {approvedPosts.slice(0, 3).map((post) => (
                 <div
                   key={post.id}
-                  className="rounded-xl p-4"
-                  style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
+                  className="rounded-2xl p-4"
+                  style={{
+                    backgroundColor: "#ffffff",
+                    border: "1.5px solid #e4e0d8",
+                  }}
                 >
                   {post.image_url && (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={post.image_url}
                       alt="post"
-                      className="w-full rounded-lg mb-3 object-cover"
+                      className="w-full rounded-xl mb-3 object-cover"
                       style={{ aspectRatio: "1", maxHeight: "120px" }}
                     />
                   )}
@@ -384,7 +397,10 @@ export default function DashboardPage() {
                     />
                     <span
                       className="text-xs"
-                      style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+                      style={{
+                        color: "#8c8880",
+                        fontFamily: "var(--font-body)",
+                      }}
                     >
                       Aprovado
                     </span>
@@ -392,7 +408,10 @@ export default function DashboardPage() {
                 </div>
               ))}
               {approvedPosts.length === 0 && (
-                <p className="text-xs" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+                <p
+                  className="text-xs"
+                  style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+                >
                   Nenhum post aprovado ainda.
                 </p>
               )}
@@ -414,8 +433,6 @@ export default function DashboardPage() {
   );
 }
 
-// ── Calendar View ─────────────────────────────────────────────────────────────
-
 function CalendarView({
   posts,
   onStatusChange,
@@ -429,28 +446,32 @@ function CalendarView({
   onStatusChange: (id: string, status: "approved" | "rejected") => void;
   onRegenerate: (id: string) => void;
   onGenerated: (c: PostContent) => void;
-  onGenStatusChange: (status: SSEStatus, stageState: StageState, progressMessage: string) => void;
+  onGenStatusChange: (
+    status: SSEStatus,
+    stageState: StageState,
+    progressMessage: string,
+  ) => void;
   triggerRef: React.MutableRefObject<(() => void) | null>;
   resetRef: React.MutableRefObject<(() => void) | null>;
 }) {
-  function groupByDate(posts: Post[]): Record<string, Post[]> {
-    const g: Record<string, Post[]> = {};
-    for (const p of posts) {
-      const d = new Date(p.created_at).toLocaleDateString("pt-BR");
-      g[d] = g[d] ? [...g[d], p] : [p];
-    }
-    return g;
+  const grouped: Record<string, Post[]> = {};
+  for (const p of posts) {
+    const d = new Date(p.created_at).toLocaleDateString("pt-BR");
+    grouped[d] = grouped[d] ? [...grouped[d], p] : [p];
   }
-
-  const grouped = groupByDate(posts);
   const dates = Array.from(
-    new Set(posts.map((p) => new Date(p.created_at).toLocaleDateString("pt-BR")))
+    new Set(
+      posts.map((p) => new Date(p.created_at).toLocaleDateString("pt-BR")),
+    ),
   );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold" style={{ fontFamily: "var(--font-sans)" }}>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <h2
+          className="text-lg font-semibold"
+          style={{ fontFamily: "var(--font-sans)" }}
+        >
           Calendário de posts
         </h2>
         <GenerateButton
@@ -466,8 +487,12 @@ function CalendarView({
           className="rounded-2xl p-12 text-center"
           style={{ border: "1.5px dashed #e4e0d8" }}
         >
-          <p className="text-sm" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
-            Nenhum post gerado ainda. Gere seu primeiro post para ver o calendário.
+          <p
+            className="text-sm"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
+            Nenhum post gerado ainda. Gere seu primeiro post para ver o
+            calendário.
           </p>
         </div>
       ) : (

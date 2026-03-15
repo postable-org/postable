@@ -1,5 +1,6 @@
 "use client";
 
+import { XLogo } from "@/components/icons/XLogo";
 import {
   Calendar,
   Facebook,
@@ -11,7 +12,6 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { XLogo } from "@/components/icons/XLogo";
 
 type PlatformId = "instagram" | "linkedin" | "facebook" | "x";
 type CampaignStatus = "draft" | "active" | "paused" | "completed";
@@ -45,7 +45,6 @@ const STATUS_CONFIG: Record<
   completed: { label: "Concluída", color: "#6366f1", bg: "#ede9fe" },
 };
 
-
 function addDaysToISODate(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
@@ -66,7 +65,7 @@ const PlatformIcon = ({
   if (id === "linkedin") return <Linkedin {...props} />;
   if (id === "facebook") return <Facebook {...props} />;
   if (id === "x") return <XLogo {...props} />;
-  return <span style={{ fontSize: 11, fontWeight: 700, color }}>Rd</span>;
+  return null;
 };
 
 function CampaignCard({
@@ -82,7 +81,6 @@ function CampaignCard({
   const platform = PLATFORMS.find((p) => p.id === campaign.platform)!;
   const start = new Date(campaign.startDate).toLocaleDateString("pt-BR");
   const end = new Date(campaign.endDate).toLocaleDateString("pt-BR");
-
   const totalDays =
     (new Date(campaign.endDate).getTime() -
       new Date(campaign.startDate).getTime()) /
@@ -96,7 +94,6 @@ function CampaignCard({
       className="rounded-2xl p-5 flex flex-col gap-4"
       style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
     >
-      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div
@@ -128,7 +125,6 @@ function CampaignCard({
         </button>
       </div>
 
-      {/* Status + goal */}
       <div className="flex items-center gap-2 flex-wrap">
         <span
           className="px-2.5 py-1 rounded-full text-xs font-medium"
@@ -149,53 +145,29 @@ function CampaignCard({
         </span>
       </div>
 
-      {/* Dates + post count */}
       <div className="grid grid-cols-3 gap-2">
-        <div>
-          <p
-            className="text-[10px] uppercase tracking-wider"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
-            Início
-          </p>
-          <p
-            className="text-xs font-medium mt-0.5"
-            style={{ fontFamily: "var(--font-body)" }}
-          >
-            {start}
-          </p>
-        </div>
-        <div>
-          <p
-            className="text-[10px] uppercase tracking-wider"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
-            Fim
-          </p>
-          <p
-            className="text-xs font-medium mt-0.5"
-            style={{ fontFamily: "var(--font-body)" }}
-          >
-            {end}
-          </p>
-        </div>
-        <div>
-          <p
-            className="text-[10px] uppercase tracking-wider"
-            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-          >
-            Posts
-          </p>
-          <p
-            className="text-xs font-medium mt-0.5"
-            style={{ fontFamily: "var(--font-body)" }}
-          >
-            {campaign.postCount}
-          </p>
-        </div>
+        {[
+          { label: "Início", value: start },
+          { label: "Fim", value: end },
+          { label: "Posts", value: String(campaign.postCount) },
+        ].map(({ label, value }) => (
+          <div key={label}>
+            <p
+              className="text-[10px] uppercase tracking-wider"
+              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+            >
+              {label}
+            </p>
+            <p
+              className="text-xs font-medium mt-0.5"
+              style={{ fontFamily: "var(--font-body)" }}
+            >
+              {value}
+            </p>
+          </div>
+        ))}
       </div>
 
-      {/* Progress */}
       {campaign.status === "active" && (
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -227,6 +199,15 @@ function CampaignCard({
   );
 }
 
+// ── Modal ────────────────────────────────────────────────────────────────────
+
+const inputClass =
+  "w-full rounded-xl border bg-[#f8f5ef] px-4 py-3 text-sm outline-none transition-all focus:border-foreground focus:ring-2 focus:ring-foreground/10 placeholder:text-muted-foreground";
+const inputBorderStyle = {
+  borderColor: "#e4e0d8",
+  fontFamily: "var(--font-body)",
+};
+
 function NewCampaignModal({
   onClose,
   onSave,
@@ -245,20 +226,13 @@ function NewCampaignModal({
     goal: "",
   });
 
-  const inputClass =
-    "w-full rounded-xl border bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-foreground focus:ring-2 focus:ring-foreground/10 placeholder:text-muted-foreground";
-  const borderStyle = {
-    borderColor: "#e4e0d8",
-    fontFamily: "var(--font-body)",
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div
         className="w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden"
         style={{ backgroundColor: "#f8f5ef" }}
       >
-        {/* Header */}
+        {/* Modal header */}
         <div
           className="flex items-center justify-between px-6 py-5"
           style={{ borderBottom: "1px solid #e4e0d8" }}
@@ -271,7 +245,7 @@ function NewCampaignModal({
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-[#f0ede7]"
+            className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-[#e4e0d8]"
           >
             <X size={16} style={{ color: "#8c8880" }} />
           </button>
@@ -280,14 +254,14 @@ function NewCampaignModal({
         <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
             <label
-              className="block text-xs font-medium mb-1.5"
+              className="block text-sm font-medium mb-1.5"
               style={{ fontFamily: "var(--font-body)" }}
             >
               Nome da campanha *
             </label>
             <input
               className={inputClass}
-              style={borderStyle}
+              style={inputBorderStyle}
               placeholder="Ex: Lançamento Verão 2025"
               value={form.name}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
@@ -296,7 +270,7 @@ function NewCampaignModal({
 
           <div>
             <label
-              className="block text-xs font-medium mb-1.5"
+              className="block text-sm font-medium mb-1.5"
               style={{ fontFamily: "var(--font-body)" }}
             >
               Plataforma
@@ -307,12 +281,11 @@ function NewCampaignModal({
                   key={id}
                   type="button"
                   onClick={() => setForm((p) => ({ ...p, platform: id }))}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all border"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
                   style={{
                     backgroundColor:
-                      form.platform === id ? "#0a0a0a" : "#ffffff",
+                      form.platform === id ? "#0a0a0a" : "#f0ede7",
                     color: form.platform === id ? "#f8f5ef" : "#0a0a0a",
-                    borderColor: form.platform === id ? "#0a0a0a" : "#e4e0d8",
                     fontFamily: "var(--font-body)",
                   }}
                 >
@@ -329,14 +302,14 @@ function NewCampaignModal({
 
           <div>
             <label
-              className="block text-xs font-medium mb-1.5"
+              className="block text-sm font-medium mb-1.5"
               style={{ fontFamily: "var(--font-body)" }}
             >
               Objetivo da campanha
             </label>
             <input
               className={inputClass}
-              style={borderStyle}
+              style={inputBorderStyle}
               placeholder="Ex: Aumentar reconhecimento, gerar vendas..."
               value={form.goal}
               onChange={(e) => setForm((p) => ({ ...p, goal: e.target.value }))}
@@ -345,14 +318,14 @@ function NewCampaignModal({
 
           <div>
             <label
-              className="block text-xs font-medium mb-1.5"
+              className="block text-sm font-medium mb-1.5"
               style={{ fontFamily: "var(--font-body)" }}
             >
               Descrição
             </label>
             <textarea
               className={`${inputClass} resize-none`}
-              style={borderStyle}
+              style={inputBorderStyle}
               rows={3}
               placeholder="Descreva o contexto e a estratégia da campanha..."
               value={form.description}
@@ -363,69 +336,63 @@ function NewCampaignModal({
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label
-                className="block text-xs font-medium mb-1.5"
-                style={{ fontFamily: "var(--font-body)" }}
-              >
-                Início
-              </label>
-              <input
-                type="date"
-                className={inputClass}
-                style={borderStyle}
-                value={form.startDate}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, startDate: e.target.value }))
-                }
-              />
-            </div>
-            <div>
-              <label
-                className="block text-xs font-medium mb-1.5"
-                style={{ fontFamily: "var(--font-body)" }}
-              >
-                Fim
-              </label>
-              <input
-                type="date"
-                className={inputClass}
-                style={borderStyle}
-                value={form.endDate}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, endDate: e.target.value }))
-                }
-              />
-            </div>
-            <div>
-              <label
-                className="block text-xs font-medium mb-1.5"
-                style={{ fontFamily: "var(--font-body)" }}
-              >
-                Nº de posts
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                className={inputClass}
-                style={borderStyle}
-                value={form.postCount}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, postCount: Number(e.target.value) }))
-                }
-              />
-            </div>
+            {[
+              {
+                label: "Início",
+                key: "startDate",
+                type: "date",
+                value: form.startDate,
+              },
+              {
+                label: "Fim",
+                key: "endDate",
+                type: "date",
+                value: form.endDate,
+              },
+              {
+                label: "Nº de posts",
+                key: "postCount",
+                type: "number",
+                value: String(form.postCount),
+              },
+            ].map(({ label, key, type, value }) => (
+              <div key={key}>
+                <label
+                  className="block text-sm font-medium mb-1.5"
+                  style={{ fontFamily: "var(--font-body)" }}
+                >
+                  {label}
+                </label>
+                <input
+                  type={type}
+                  className={inputClass}
+                  style={inputBorderStyle}
+                  value={value}
+                  min={type === "number" ? 1 : undefined}
+                  max={type === "number" ? 100 : undefined}
+                  onChange={(e) =>
+                    setForm((p) => ({
+                      ...p,
+                      [key]:
+                        type === "number"
+                          ? Number(e.target.value)
+                          : e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            ))}
           </div>
         </div>
 
+        {/* Modal footer */}
         <div
           className="px-6 py-4 flex justify-end gap-3"
           style={{ borderTop: "1px solid #e4e0d8" }}
         >
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-full text-sm font-medium transition-all"
+            className="px-4 py-2 rounded-xl text-xs font-medium transition-all"
             style={{
               backgroundColor: "#f0ede7",
               color: "#0a0a0a",
@@ -441,7 +408,7 @@ function NewCampaignModal({
               onClose();
             }}
             disabled={!form.name.trim()}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-semibold transition-all disabled:opacity-40"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40"
             style={{
               backgroundColor: "#0a0a0a",
               color: "#f8f5ef",
@@ -456,6 +423,8 @@ function NewCampaignModal({
     </div>
   );
 }
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -481,14 +450,10 @@ export default function CampaignsPage() {
     ]);
   };
 
-  const handleDelete = (id: string) => {
-    setCampaigns((prev) => prev.filter((c) => c.id !== id));
-  };
-
   return (
-    <div className="px-6 py-8 space-y-6 pb-24 md:pb-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1
             className="text-3xl font-bold tracking-tight"
@@ -505,21 +470,20 @@ export default function CampaignsPage() {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold shrink-0"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium shrink-0 transition-all"
           style={{
             backgroundColor: "#0a0a0a",
             color: "#f8f5ef",
             fontFamily: "var(--font-body)",
           }}
         >
-          <Plus size={15} strokeWidth={2.5} />
+          <Plus size={14} strokeWidth={2.5} />
           Nova campanha
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-4">
-        {/* Platform filter */}
+      {/* ── Filters ── mesmo padrão de pill/tag do Contexto */}
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1">
           <button
             onClick={() => setFilterPlatform("all")}
@@ -555,7 +519,6 @@ export default function CampaignsPage() {
 
         <div className="h-4 w-px" style={{ backgroundColor: "#e4e0d8" }} />
 
-        {/* Status filter */}
         <div className="flex items-center gap-1">
           {(["all", "draft", "active", "paused", "completed"] as const).map(
             (s) => (
@@ -578,7 +541,7 @@ export default function CampaignsPage() {
         </div>
       </div>
 
-      {/* Campaign grid */}
+      {/* ── Grid ── */}
       {filtered.length === 0 ? (
         <div
           className="rounded-2xl p-14 text-center"
@@ -598,7 +561,9 @@ export default function CampaignsPage() {
               key={campaign.id}
               campaign={campaign}
               now={referenceNow}
-              onDelete={handleDelete}
+              onDelete={(id) =>
+                setCampaigns((prev) => prev.filter((c) => c.id !== id))
+              }
             />
           ))}
         </div>

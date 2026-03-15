@@ -1,5 +1,6 @@
 "use client";
 
+import { XLogo } from "@/components/icons/XLogo";
 import type { Post } from "@/lib/api/posts";
 import { getPosts, updatePostStatus } from "@/lib/api/posts";
 import {
@@ -15,14 +16,11 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { XLogo } from "@/components/icons/XLogo";
 
 type ColumnId = "draft" | "pending" | "approved" | "published" | "rejected";
-
 interface BoardPost extends Post {
   platform: string;
 }
-
 type BoardState = Record<ColumnId, BoardPost[]>;
 
 const COLUMN_DEFS = [
@@ -103,9 +101,7 @@ function PipelineCard({
   isDragging: boolean;
 }) {
   const plat = getPlatformEntry(post.platform);
-  const formatLabel =
-    FORMAT_LABEL[post.suggested_format] ?? "Post";
-
+  const formatLabel = FORMAT_LABEL[post.suggested_format] ?? "Post";
   return (
     <div
       draggable
@@ -224,7 +220,6 @@ function BoardColumn({
 }) {
   const { Icon } = colDef;
   const isOver = dragOver === colDef.id;
-
   return (
     <div
       className="flex flex-col shrink-0 rounded-2xl"
@@ -247,25 +242,23 @@ function BoardColumn({
         >
           <Icon size={14} strokeWidth={2} style={{ color: colDef.color }} />
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span
-              className="text-sm font-semibold truncate"
-              style={{ fontFamily: "var(--font-sans)", color: "#0a0a0a" }}
-            >
-              {colDef.label}
-            </span>
-            <span
-              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-              style={{
-                backgroundColor: `${colDef.color}18`,
-                color: colDef.color,
-                fontFamily: "var(--font-body)",
-              }}
-            >
-              {posts.length}
-            </span>
-          </div>
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <span
+            className="text-sm font-semibold truncate"
+            style={{ fontFamily: "var(--font-sans)", color: "#0a0a0a" }}
+          >
+            {colDef.label}
+          </span>
+          <span
+            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+            style={{
+              backgroundColor: `${colDef.color}18`,
+              color: colDef.color,
+              fontFamily: "var(--font-body)",
+            }}
+          >
+            {posts.length}
+          </span>
         </div>
       </div>
 
@@ -374,9 +367,7 @@ export default function PipelinePage() {
     [],
   );
 
-  const handleDragLeave = useCallback(() => {
-    setDragOver(null);
-  }, []);
+  const handleDragLeave = useCallback(() => setDragOver(null), []);
 
   const handleDrop = useCallback(
     async (e: React.DragEvent, toColumn: ColumnId) => {
@@ -388,7 +379,6 @@ export default function PipelinePage() {
       }
       const { id, fromColumn } = dragging;
       setDragging(null);
-
       setBoard((prev) => {
         const post = prev[fromColumn].find((p) => p.id === id);
         if (!post) return prev;
@@ -398,7 +388,6 @@ export default function PipelinePage() {
           [toColumn]: [{ ...post }, ...prev[toColumn]],
         };
       });
-
       if (toColumn === "approved" || toColumn === "rejected") {
         try {
           await updatePostStatus(id, toColumn);
@@ -431,18 +420,16 @@ export default function PipelinePage() {
           rejected: board.rejected.filter((p) => p.platform === activePlatform),
         };
 
-  const totalPosts =
-    board.draft.length +
-    board.pending.length +
-    board.approved.length +
-    board.published.length +
-    board.rejected.length;
+  const totalPosts = Object.values(board).reduce(
+    (acc, col) => acc + col.length,
+    0,
+  );
 
   return (
     <div className="flex flex-col flex-1 h-full min-h-screen pb-24 md:pb-0 min-w-0">
-      {/* Header */}
+      {/* ── Header — mesmo padrão max-w-6xl + px-6 py-8 ── */}
       <div
-        className="px-6 py-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4 shrink-0"
+        className="w-full max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4 shrink-0"
         style={{ borderBottom: "1px solid #e4e0d8" }}
       >
         <div>
@@ -460,6 +447,7 @@ export default function PipelinePage() {
           </p>
         </div>
 
+        {/* Platform filter — mesmo padrão pill do Contexto */}
         <div
           className="flex items-center gap-1 p-1 rounded-2xl overflow-x-auto shrink-0"
           style={{ backgroundColor: "#f0ede7" }}
@@ -492,9 +480,9 @@ export default function PipelinePage() {
         </div>
       </div>
 
-      {/* Board */}
+      {/* ── Board ── */}
       <div
-        className="flex gap-4 px-6 py-5 overflow-x-auto"
+        className="w-full max-w-6xl mx-auto flex gap-4 px-6 py-5 overflow-x-auto"
         style={{ alignItems: "flex-start", flex: 1 }}
         onDragEnd={() => {
           setDragging(null);

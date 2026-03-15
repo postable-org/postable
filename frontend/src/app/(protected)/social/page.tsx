@@ -1,28 +1,29 @@
 "use client";
 
+import { XLogo } from "@/components/icons/XLogo";
 import { getPosts, type Post } from "@/lib/api/posts";
 import {
-  deleteSocialConnection,
   getSocialConnections,
   getSocialJobs,
   publishSocialPost,
-  startSocialOAuth,
   type SocialConnection,
   type SocialJob,
   type SocialNetwork,
 } from "@/lib/api/social";
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle,
   ChevronDown,
   Facebook,
   Instagram,
   Linkedin,
   Loader2,
+  Lock,
   Radio,
   Send,
-  Trash2,
 } from "lucide-react";
+import Link from "next/link";
 import {
   useEffect,
   useMemo,
@@ -30,7 +31,6 @@ import {
   useTransition,
   type ElementType,
 } from "react";
-import { XLogo } from "@/components/icons/XLogo";
 
 const NETWORKS: Array<{
   id: SocialNetwork;
@@ -75,50 +75,6 @@ const NETWORKS: Array<{
   },
 ];
 
-function oauthGuide(network: SocialNetwork | undefined): {
-  title: string;
-  steps: string[];
-  note: string;
-} {
-  switch (network) {
-    case "linkedin":
-      return {
-        title: "Passo a passo para conectar LinkedIn",
-        steps: [
-          "Certifique-se de estar logado no Postable.",
-          "Clique no botão abaixo para abrir o login do LinkedIn.",
-          "Autorize o escopo de publicação (w_member_social).",
-          "Você será redirecionado de volta com a conta conectada.",
-        ],
-        note: "Se der erro, faça logout e login novamente.",
-      };
-    case "x":
-      return {
-        title: "Passo a passo para conectar X",
-        steps: [
-          "Certifique-se de estar logado no Postable.",
-          "Clique no botão abaixo para abrir a autorização oficial do X.",
-          "Autorize o acesso à conta para publicar via API v2.",
-          "Você será redirecionado de volta com a conta conectada.",
-        ],
-        note: "Se der erro, faça logout e login novamente.",
-      };
-    case "facebook":
-    case "instagram":
-    default:
-      return {
-        title: `Passo a passo para conectar ${networkMeta(network ?? "instagram").label}`,
-        steps: [
-          "Certifique-se de estar logado no Postable.",
-          "Clique no botão abaixo para ir ao login da Meta.",
-          "Autorize o acesso à sua conta e páginas.",
-          "Você será redirecionado de volta com a conta conectada.",
-        ],
-        note: "Se der erro, faça logout e login novamente.",
-      };
-  }
-}
-
 function networkMeta(network: SocialNetwork) {
   return NETWORKS.find((item) => item.id === network) ?? NETWORKS[0];
 }
@@ -143,54 +99,11 @@ function statusLabel(status: SocialJob["status"]) {
   }
 }
 
-function readMetadataString(
-  metadata: SocialConnection["metadata_json"],
-  key: string,
-): string | null {
-  if (!metadata || typeof metadata !== "object") {
-    return null;
-  }
-  const value = metadata[key];
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed || null;
-}
-
-function connectionAvatarURL(connection: SocialConnection): string | null {
-  const fromMetadata = readMetadataString(
-    connection.metadata_json,
-    "avatar_url",
-  );
-  if (fromMetadata) {
-    return fromMetadata;
-  }
-  if (connection.network === "facebook") {
-    return `https://graph.facebook.com/v25.0/${connection.account_id}/picture?type=normal`;
-  }
-  return null;
-}
-
-function accountInitials(connection: SocialConnection): string {
-  const source =
-    connection.account_name?.trim() || connection.account_id?.trim() || "Conta";
-  return (
-    source
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((chunk) => chunk[0]?.toUpperCase() ?? "")
-      .join("") || "C"
-  );
-}
-
 export default function SocialPage() {
   const [connections, setConnections] = useState<SocialConnection[]>([]);
   const [jobs, setJobs] = useState<SocialJob[]>([]);
   const [visibleJobsCount, setVisibleJobsCount] = useState(3);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [activeNetwork, setActiveNetwork] =
-    useState<SocialNetwork>("instagram");
   const [feedback, setFeedback] = useState<{
     tone: "success" | "error";
     text: string;
@@ -230,8 +143,12 @@ export default function SocialPage() {
       ),
     [connections, publishForm.network],
   );
-  const activeNetworkMeta = networkMeta(activeNetwork);
-  const oauthHelp = oauthGuide(activeNetworkMeta.oauth);
+  const hasAnyConnections = connections.length > 0;
+  const hasConnectionsForSelectedNetwork = filteredConnections.length > 0;
+  const publishBlocked =
+    !hasAnyConnections || !hasConnectionsForSelectedNetwork;
+  const selectedNetworkMeta = networkMeta(publishForm.network);
+  const selectedNetworkConnectionsCount = filteredConnections.length;
   const visibleJobs = useMemo(
     () => jobs.slice(0, visibleJobsCount),
     [jobs, visibleJobsCount],
@@ -291,19 +208,21 @@ export default function SocialPage() {
     });
   }
 
-  async function handleOAuth(network: SocialNetwork) {
-    try {
-      const authURL = await startSocialOAuth(network);
-      window.location.href = authURL;
-    } catch (error) {
+  async function handlePublishSubmit(deliveryMode: "now" | "schedule") {
+    if (!hasAnyConnections) {
       setFeedback({
         tone: "error",
-        text: error instanceof Error ? error.message : "Falha ao iniciar OAuth",
+        text: "Você ainda não possui nenhuma conta conectada. Vá em Configurações para conectar.",
       });
+      return;
     }
-  }
-
-  async function handlePublishSubmit(deliveryMode: "now" | "schedule") {
+    if (!hasConnectionsForSelectedNetwork) {
+      setFeedback({
+        tone: "error",
+        text: `Nenhuma conta ${networkMeta(publishForm.network).label} conectada. Vá em Configurações para conectar esta rede.`,
+      });
+      return;
+    }
     if (publishForm.source === "manual" && !publishForm.text.trim()) {
       setFeedback({
         tone: "error",
@@ -390,7 +309,7 @@ export default function SocialPage() {
 
   return (
     <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <p
             className="text-sm"
@@ -409,12 +328,20 @@ export default function SocialPage() {
           {NETWORKS.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveNetwork(item.id)}
-              className="px-3 py-2 rounded-xl text-sm font-medium transition-all"
+              onClick={() =>
+                setPublishForm((current) => ({
+                  ...current,
+                  network: item.id,
+                  connectionId: "",
+                }))
+              }
+              className="px-3 py-2 rounded-xl text-xs font-medium transition-all border"
               style={{
                 backgroundColor:
-                  activeNetwork === item.id ? "#0a0a0a" : "#f0ede7",
-                color: activeNetwork === item.id ? "#f8f5ef" : "#0a0a0a",
+                  publishForm.network === item.id ? "#0a0a0a" : "#f0ede7",
+                color: publishForm.network === item.id ? "#f8f5ef" : "#0a0a0a",
+                borderColor:
+                  publishForm.network === item.id ? "#0a0a0a" : "#e4e0d8",
                 fontFamily: "var(--font-body)",
               }}
             >
@@ -438,494 +365,420 @@ export default function SocialPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.05fr_1.25fr] gap-6">
-        <section
-          className="rounded-3xl p-6"
-          style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
-        >
-          <div className="flex items-start justify-between gap-4 mb-5">
-            <div>
-              <h2
-                className="text-lg font-semibold"
-                style={{ fontFamily: "var(--font-sans)" }}
-              >
-                Conectar contas
-              </h2>
-              <p
-                className="text-sm mt-1"
-                style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-              >
-                {activeNetworkMeta.description}
-              </p>
-            </div>
-            {activeNetworkMeta.Icon ? (
-              <activeNetworkMeta.Icon
-                size={18}
-                style={{ color: activeNetworkMeta.color }}
-              />
-            ) : (
-              <span
-                className="text-xs font-bold"
-                style={{ color: activeNetworkMeta.color }}
-              >
-                Rd
-              </span>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            {activeNetworkMeta.oauth ? (
-              <div className="space-y-3">
-                <div
-                  className="rounded-2xl p-4 space-y-2"
-                  style={{
-                    backgroundColor: "#f8f5ef",
-                    border: "1px solid #e4e0d8",
-                  }}
-                >
-                  <p
-                    className="text-xs font-medium"
-                    style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
-                  >
-                    {oauthHelp.title}
-                  </p>
-                  <ol
-                    className="text-xs space-y-1 pl-4 list-decimal"
-                    style={{ color: "#6b6258", fontFamily: "var(--font-body)" }}
-                  >
-                    {oauthHelp.steps.map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ol>
-                  <p
-                    className="text-[11px] pt-1"
-                    style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-                  >
-                    {oauthHelp.note}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleOAuth(activeNetworkMeta.oauth!)}
-                  className="w-full rounded-2xl px-4 py-3 text-sm font-medium"
-                  style={{
-                    backgroundColor: "#0a0a0a",
-                    color: "#f8f5ef",
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  Conectar {activeNetworkMeta.label} via OAuth oficial
-                </button>
-              </div>
-            ) : null}
-
-            <div className="space-y-2 pt-2">
-              {connections.filter((c) => c.network === activeNetwork).length ===
-              0 ? (
-                <p
-                  className="text-sm"
-                  style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-                >
-                  Nenhuma conta {activeNetworkMeta.label} conectada ainda.
-                </p>
-              ) : (
-                connections
-                  .filter((c) => c.network === activeNetwork)
-                  .map((connection) => {
-                    const avatarURL = connectionAvatarURL(connection);
-                    return (
-                      <div
-                        key={connection.id}
-                        className="rounded-2xl px-4 py-3"
-                        style={{
-                          backgroundColor: "#f8f5ef",
-                          border: "1px solid #ece7de",
-                        }}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            {avatarURL ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={avatarURL}
-                                alt={`Avatar de ${connection.account_name || connection.account_id}`}
-                                className="w-10 h-10 rounded-full object-cover border"
-                                style={{ borderColor: "#ddd6cb" }}
-                              />
-                            ) : (
-                              <div
-                                className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold"
-                                style={{
-                                  backgroundColor: "#ece7de",
-                                  color: "#4a433b",
-                                  fontFamily: "var(--font-body)",
-                                }}
-                              >
-                                {accountInitials(connection)}
-                              </div>
-                            )}
-
-                            <div className="min-w-0">
-                              <p
-                                className="text-sm font-medium truncate"
-                                style={{ fontFamily: "var(--font-body)" }}
-                              >
-                                {connection.account_name ||
-                                  connection.account_id}
-                              </p>
-                              <p
-                                className="text-xs mt-1"
-                                style={{
-                                  color: "#8c8880",
-                                  fontFamily: "var(--font-body)",
-                                }}
-                              >
-                                Expira em{" "}
-                                {formatDate(
-                                  connection.token_expires_at ?? null,
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={async () => {
-                              try {
-                                await deleteSocialConnection(connection.id);
-                                setConnections((prev) =>
-                                  prev.filter((c) => c.id !== connection.id),
-                                );
-                              } catch (err) {
-                                setFeedback({
-                                  tone: "error",
-                                  text:
-                                    err instanceof Error
-                                      ? err.message
-                                      : "Falha ao desconectar",
-                                });
-                              }
-                            }}
-                            className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-red-100"
-                            title="Desconectar"
-                          >
-                            <Trash2 size={14} style={{ color: "#dc2626" }} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section
-          className="rounded-3xl p-6"
-          style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
-        >
-          <div className="flex items-center justify-between gap-4 mb-5">
-            <div>
-              <h2
-                className="text-lg font-semibold"
-                style={{ fontFamily: "var(--font-sans)" }}
-              >
-                Publicar ou agendar
-              </h2>
-              <p
-                className="text-sm mt-1"
-                style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-              >
-                Escolha uma conta conectada e dispare agora ou no horário exato.
-              </p>
-            </div>
-            {isPending && <Loader2 className="animate-spin" size={18} />}
-          </div>
-
-          <div
-            className="rounded-2xl p-3 mb-3"
-            style={{ backgroundColor: "#f8f5ef", border: "1px solid #e4e0d8" }}
-          >
-            <p
-              className="text-xs font-medium mb-2"
-              style={{ color: "#6b6258", fontFamily: "var(--font-body)" }}
+      <section
+        className="rounded-2xl p-6"
+        style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
+      >
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div>
+            <h2
+              className="text-lg font-semibold"
+              style={{ fontFamily: "var(--font-sans)" }}
             >
-              Modo de envio
+              Publicar ou agendar
+            </h2>
+            <p
+              className="text-sm mt-1"
+              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+            >
+              Escolha uma conta conectada e dispare agora ou no horário exato.
             </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setPublishForm((current) => ({
-                    ...current,
-                    deliveryMode: "now",
-                    publishAt: "",
-                  }))
-                }
-                className="rounded-xl px-3 py-2 text-xs font-medium"
-                style={{
-                  backgroundColor:
-                    publishForm.deliveryMode === "now" ? "#0a0a0a" : "#ece7de",
-                  color:
-                    publishForm.deliveryMode === "now" ? "#f8f5ef" : "#0a0a0a",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                Publicar agora
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setPublishForm((current) => ({
-                    ...current,
-                    deliveryMode: "schedule",
-                  }))
-                }
-                className="rounded-xl px-3 py-2 text-xs font-medium"
-                style={{
-                  backgroundColor:
-                    publishForm.deliveryMode === "schedule"
-                      ? "#0a0a0a"
-                      : "#ece7de",
-                  color:
-                    publishForm.deliveryMode === "schedule"
-                      ? "#f8f5ef"
-                      : "#0a0a0a",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                Agendar
-              </button>
-            </div>
           </div>
+          {isPending && <Loader2 className="animate-spin" size={18} />}
+        </div>
 
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handlePublishSubmit("now");
+        <div
+          className="rounded-2xl px-4 py-3 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(248,245,239,1) 0%, rgba(243,239,232,1) 100%)",
+            border: "1px solid #e4e0d8",
+          }}
+        >
+          <div>
+            <p
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+            >
+              Rede ativa
+            </p>
+            <p
+              className="text-sm mt-1 font-medium"
+              style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
+            >
+              {selectedNetworkMeta.label} • {selectedNetworkConnectionsCount}{" "}
+              conta(s) conectada(s)
+            </p>
+          </div>
+          <Link
+            href="/settings"
+            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium"
+            style={{
+              backgroundColor: "#0a0a0a",
+              color: "#f8f5ef",
+              fontFamily: "var(--font-body)",
             }}
-            className="space-y-3"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <select
-                value={publishForm.network}
-                onChange={(event) =>
-                  setPublishForm((current) => ({
-                    ...current,
-                    network: event.target.value as SocialNetwork,
-                    connectionId: "",
-                  }))
-                }
-                className="rounded-2xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #e4e0d8",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                {NETWORKS.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={publishForm.connectionId}
-                onChange={(event) =>
-                  setPublishForm((current) => ({
-                    ...current,
-                    connectionId: event.target.value,
-                  }))
-                }
-                className="rounded-2xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #e4e0d8",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                <option value="">Usar conexão mais recente da rede</option>
-                {filteredConnections.map((connection) => (
-                  <option key={connection.id} value={connection.id}>
-                    {connection.account_name || connection.account_id}
-                  </option>
-                ))}
-              </select>
-            </div>
+            Gerenciar conexões
+            <ArrowRight size={13} />
+          </Link>
+        </div>
 
-            <div className="flex gap-2">
-              {(
-                [
-                  { id: "manual", label: "Escrever agora" },
-                  { id: "generated", label: "Usar post gerado" },
-                ] as const
-              ).map((item) => (
+        <div className="relative">
+          <div
+            className={
+              publishBlocked
+                ? "pointer-events-none select-none blur-[3px] opacity-60 transition-all"
+                : "transition-all"
+            }
+          >
+            <div
+              className="rounded-2xl p-3 mb-3"
+              style={{
+                backgroundColor: "#f8f5ef",
+                border: "1px solid #e4e0d8",
+                opacity: publishBlocked ? 0.7 : 1,
+              }}
+            >
+              <p
+                className="text-xs font-medium mb-2"
+                style={{ color: "#6b6258", fontFamily: "var(--font-body)" }}
+              >
+                Modo de envio
+              </p>
+              <div className="flex gap-2">
                 <button
-                  key={item.id}
                   type="button"
                   onClick={() =>
                     setPublishForm((current) => ({
                       ...current,
-                      source: item.id,
+                      deliveryMode: "now",
+                      publishAt: "",
                     }))
                   }
                   className="rounded-xl px-3 py-2 text-xs font-medium"
                   style={{
                     backgroundColor:
-                      publishForm.source === item.id ? "#0a0a0a" : "#f0ede7",
+                      publishForm.deliveryMode === "now"
+                        ? "#0a0a0a"
+                        : "#ece7de",
                     color:
-                      publishForm.source === item.id ? "#f8f5ef" : "#0a0a0a",
+                      publishForm.deliveryMode === "now"
+                        ? "#f8f5ef"
+                        : "#0a0a0a",
                     fontFamily: "var(--font-body)",
                   }}
                 >
-                  {item.label}
+                  Publicar agora
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPublishForm((current) => ({
+                      ...current,
+                      deliveryMode: "schedule",
+                    }))
+                  }
+                  className="rounded-xl px-3 py-2 text-xs font-medium"
+                  style={{
+                    backgroundColor:
+                      publishForm.deliveryMode === "schedule"
+                        ? "#0a0a0a"
+                        : "#ece7de",
+                    color:
+                      publishForm.deliveryMode === "schedule"
+                        ? "#f8f5ef"
+                        : "#0a0a0a",
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  Agendar
+                </button>
+              </div>
             </div>
 
-            {publishForm.source === "generated" ? (
-              <select
-                value={publishForm.postId}
-                onChange={(event) =>
-                  setPublishForm((current) => ({
-                    ...current,
-                    postId: event.target.value,
-                  }))
-                }
-                className="w-full rounded-2xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #e4e0d8",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                <option value="">Selecione um post gerado</option>
-                {posts.map((post) => (
-                  <option key={post.id} value={post.id}>
-                    {post.post_text?.slice(0, 80) ?? post.id}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <textarea
-                value={publishForm.text}
-                onChange={(event) =>
-                  setPublishForm((current) => ({
-                    ...current,
-                    text: event.target.value,
-                  }))
-                }
-                placeholder="Texto do post"
-                rows={5}
-                className="w-full rounded-2xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #e4e0d8",
-                  fontFamily: "var(--font-body)",
-                }}
-              />
-            )}
-
-            <input
-              value={publishForm.link}
-              onChange={(event) =>
-                setPublishForm((current) => ({
-                  ...current,
-                  link: event.target.value,
-                }))
-              }
-              placeholder="Link opcional"
-              className="w-full rounded-2xl px-4 py-3 text-sm"
-              style={{
-                backgroundColor: "#f8f5ef",
-                border: "1px solid #e4e0d8",
-                fontFamily: "var(--font-body)",
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handlePublishSubmit("now");
               }}
-            />
-
-            {(publishForm.network === "instagram" ||
-              publishForm.network === "facebook") && (
-              <textarea
-                value={publishForm.mediaUrls}
-                onChange={(event) =>
-                  setPublishForm((current) => ({
-                    ...current,
-                    mediaUrls: event.target.value,
-                  }))
-                }
-                placeholder="Uma URL pública de mídia por linha"
-                rows={4}
-                className="w-full rounded-2xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #e4e0d8",
-                  fontFamily: "var(--font-body)",
-                }}
-              />
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 items-center">
-              {publishForm.deliveryMode === "schedule" ? (
-                <input
-                  type="datetime-local"
-                  value={publishForm.publishAt}
+              className="space-y-3"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select
+                  value={publishForm.network}
                   onChange={(event) =>
                     setPublishForm((current) => ({
                       ...current,
-                      publishAt: event.target.value,
+                      network: event.target.value as SocialNetwork,
+                      connectionId: "",
                     }))
                   }
                   className="rounded-2xl px-4 py-3 text-sm"
+                  style={{
+                    backgroundColor: "#f8f5ef",
+                    border: "1px solid #e4e0d8",
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  {NETWORKS.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={publishForm.connectionId}
+                  onChange={(event) =>
+                    setPublishForm((current) => ({
+                      ...current,
+                      connectionId: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl px-4 py-3 text-sm"
+                  style={{
+                    backgroundColor: "#f8f5ef",
+                    border: "1px solid #e4e0d8",
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  <option value="">Usar conexão mais recente da rede</option>
+                  {filteredConnections.map((connection) => (
+                    <option key={connection.id} value={connection.id}>
+                      {connection.account_name || connection.account_id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-2">
+                {(
+                  [
+                    { id: "manual", label: "Escrever agora" },
+                    { id: "generated", label: "Usar post gerado" },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() =>
+                      setPublishForm((current) => ({
+                        ...current,
+                        source: item.id,
+                      }))
+                    }
+                    className="rounded-xl px-3 py-2 text-xs font-medium"
+                    style={{
+                      backgroundColor:
+                        publishForm.source === item.id ? "#0a0a0a" : "#f0ede7",
+                      color:
+                        publishForm.source === item.id ? "#f8f5ef" : "#0a0a0a",
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              {publishForm.source === "generated" ? (
+                <select
+                  value={publishForm.postId}
+                  onChange={(event) =>
+                    setPublishForm((current) => ({
+                      ...current,
+                      postId: event.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl px-4 py-3 text-sm"
+                  style={{
+                    backgroundColor: "#f8f5ef",
+                    border: "1px solid #e4e0d8",
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  <option value="">Selecione um post gerado</option>
+                  {posts.map((post) => (
+                    <option key={post.id} value={post.id}>
+                      {post.post_text?.slice(0, 80) ?? post.id}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <textarea
+                  value={publishForm.text}
+                  onChange={(event) =>
+                    setPublishForm((current) => ({
+                      ...current,
+                      text: event.target.value,
+                    }))
+                  }
+                  placeholder="Texto do post"
+                  rows={5}
+                  className="w-full rounded-2xl px-4 py-3 text-sm"
                   style={{
                     backgroundColor: "#f8f5ef",
                     border: "1px solid #e4e0d8",
                     fontFamily: "var(--font-body)",
                   }}
                 />
-              ) : (
-                <div
-                  className="rounded-2xl px-4 py-3 text-sm"
+              )}
+
+              <input
+                value={publishForm.link}
+                onChange={(event) =>
+                  setPublishForm((current) => ({
+                    ...current,
+                    link: event.target.value,
+                  }))
+                }
+                placeholder="Link opcional"
+                className="w-full rounded-2xl px-4 py-3 text-sm"
+                style={{
+                  backgroundColor: "#f8f5ef",
+                  border: "1px solid #e4e0d8",
+                  fontFamily: "var(--font-body)",
+                }}
+              />
+
+              {(publishForm.network === "instagram" ||
+                publishForm.network === "facebook") && (
+                <textarea
+                  value={publishForm.mediaUrls}
+                  onChange={(event) =>
+                    setPublishForm((current) => ({
+                      ...current,
+                      mediaUrls: event.target.value,
+                    }))
+                  }
+                  placeholder="Uma URL pública de mídia por linha"
+                  rows={4}
+                  className="w-full rounded-2xl px-4 py-3 text-sm"
                   style={{
                     backgroundColor: "#f8f5ef",
-                    border: "1px dashed #d9d3ca",
-                    color: "#8c8880",
+                    border: "1px solid #e4e0d8",
+                    fontFamily: "var(--font-body)",
+                  }}
+                />
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 items-center">
+                {publishForm.deliveryMode === "schedule" ? (
+                  <input
+                    type="datetime-local"
+                    value={publishForm.publishAt}
+                    onChange={(event) =>
+                      setPublishForm((current) => ({
+                        ...current,
+                        publishAt: event.target.value,
+                      }))
+                    }
+                    className="rounded-2xl px-4 py-3 text-sm"
+                    style={{
+                      backgroundColor: "#f8f5ef",
+                      border: "1px solid #e4e0d8",
+                      fontFamily: "var(--font-body)",
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="rounded-2xl px-4 py-3 text-sm"
+                    style={{
+                      backgroundColor: "#f8f5ef",
+                      border: "1px dashed #d9d3ca",
+                      color: "#8c8880",
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    Envio imediato habilitado.
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={publishBlocked}
+                  className="rounded-xl px-3 py-2 text-xs font-medium inline-flex items-center justify-center gap-1.5"
+                  style={{
+                    backgroundColor: publishBlocked ? "#d9d3ca" : "#0a0a0a",
+                    color: publishBlocked ? "#8c8880" : "#f8f5ef",
+                    fontFamily: "var(--font-body)",
+                    cursor: publishBlocked ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Send size={15} />
+                  Publicar agora
+                </button>
+                <button
+                  type="button"
+                  disabled={publishBlocked}
+                  onClick={() => {
+                    void handlePublishSubmit("schedule");
+                  }}
+                  className="rounded-xl px-3 py-2 text-xs font-medium inline-flex items-center justify-center gap-1.5"
+                  style={{
+                    backgroundColor: publishBlocked ? "#f0ede7" : "#ece7de",
+                    color: publishBlocked ? "#a09d98" : "#0a0a0a",
+                    fontFamily: "var(--font-body)",
+                    cursor: publishBlocked ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <Radio size={15} />
+                  Agendar
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {publishBlocked && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+              <div
+                className="max-w-md w-full rounded-2xl p-5 text-sm"
+                style={{
+                  backgroundColor: "rgba(250, 247, 241, 0.9)",
+                  border: "1px solid rgba(228, 224, 216, 0.9)",
+                  boxShadow: "0 16px 40px rgba(10,10,10,0.08)",
+                  backdropFilter: "blur(8px)",
+                  color: "#4a433b",
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                  style={{ backgroundColor: "#f0ede7" }}
+                >
+                  <Lock size={16} style={{ color: "#6b6258" }} />
+                </div>
+                <p
+                  className="font-semibold text-base"
+                  style={{ color: "#0a0a0a" }}
+                >
+                  {!hasAnyConnections
+                    ? "Nenhuma conta conectada"
+                    : `Sem conta ${networkMeta(publishForm.network).label} conectada`}
+                </p>
+                <p className="mt-1.5" style={{ color: "#6b6258" }}>
+                  Conecte uma conta em Configurações para liberar publicação e
+                  agendamento nesta rede.
+                </p>
+                <Link
+                  href="/settings"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium"
+                  style={{
+                    backgroundColor: "#0a0a0a",
+                    color: "#f8f5ef",
                     fontFamily: "var(--font-body)",
                   }}
                 >
-                  Envio imediato habilitado.
-                </div>
-              )}
-              <button
-                type="submit"
-                className="rounded-2xl px-5 py-3 text-sm font-medium inline-flex items-center justify-center gap-2"
-                style={{
-                  backgroundColor: "#0a0a0a",
-                  color: "#f8f5ef",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                <Send size={15} />
-                Publicar agora
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void handlePublishSubmit("schedule");
-                }}
-                className="rounded-2xl px-5 py-3 text-sm font-medium inline-flex items-center justify-center gap-2"
-                style={{
-                  backgroundColor: "#ece7de",
-                  color: "#0a0a0a",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                <Radio size={15} />
-                Agendar
-              </button>
+                  Ir para Configurações
+                  <ArrowRight size={13} />
+                </Link>
+              </div>
             </div>
-          </form>
-        </section>
-      </div>
+          )}
+        </div>
+      </section>
 
       <section
-        className="rounded-3xl p-6"
+        className="rounded-2xl p-6"
         style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
       >
         <div className="flex items-center justify-between gap-4 mb-4">
@@ -946,7 +799,7 @@ export default function SocialPage() {
           </div>
           <button
             onClick={refreshData}
-            className="text-sm font-medium"
+            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium"
             style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
           >
             Atualizar
@@ -1071,7 +924,7 @@ export default function SocialPage() {
             <button
               type="button"
               onClick={() => setVisibleJobsCount((current) => current + 3)}
-              className="rounded-2xl px-4 py-2 text-sm inline-flex items-center gap-2"
+              className="rounded-xl px-3 py-2 text-xs inline-flex items-center gap-1.5 font-medium"
               style={{
                 backgroundColor: "#ece7de",
                 color: "#0a0a0a",

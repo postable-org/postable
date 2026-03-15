@@ -1,19 +1,27 @@
 "use client";
 
+import { XLogo } from "@/components/icons/XLogo";
+import {
+  deleteSocialConnection,
+  getSocialConnections,
+  startSocialOAuth,
+  type SocialConnection as ApiSocialConnection,
+  type SocialNetwork,
+} from "@/lib/api/social";
 import {
   createPortalSession,
   getSubscription,
   PLAN_LIMITS,
 } from "@/lib/api/subscription";
-import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CreditCard, ExternalLink } from "lucide-react";
-import Link from "next/link";
-
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
+import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronRight,
+  CreditCard,
+  ExternalLink,
   Facebook,
   Instagram,
   Link2,
@@ -22,15 +30,14 @@ import {
   Shield,
   User as UserIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { XLogo } from "@/components/icons/XLogo";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 const PLAN_LABELS: Record<string, string> = {
   basic: "Basic",
   advanced: "Advanced",
   agency: "Agency",
 };
-
 const STATUS_LABELS: Record<string, string> = {
   active: "Ativo",
   trialing: "Em trial",
@@ -39,21 +46,14 @@ const STATUS_LABELS: Record<string, string> = {
   unpaid: "Não pago",
 };
 
-// ─── Types (ready for backend) ────────────────────────────────────────────────
-
-export interface SocialConnection {
-  platformId: string;
-  accountName: string;
-  connectedAt: string;
-}
-
-// ─── Platform definitions ─────────────────────────────────────────────────────
+type SocialConnection = ApiSocialConnection;
 
 const SOCIAL_PLATFORMS = [
   {
     id: "instagram",
     label: "Instagram",
     description: "Publique fotos, reels e stories",
+    oauth: "facebook",
     Icon: Instagram,
     color: "#E1306C",
     bgColor: "#FFF0F5",
@@ -62,6 +62,7 @@ const SOCIAL_PLATFORMS = [
     id: "linkedin",
     label: "LinkedIn",
     description: "Conteúdo profissional e B2B",
+    oauth: "linkedin",
     Icon: Linkedin,
     color: "#0A66C2",
     bgColor: "#EEF6FF",
@@ -70,6 +71,7 @@ const SOCIAL_PLATFORMS = [
     id: "facebook",
     label: "Facebook",
     description: "Alcance amplo e grupos",
+    oauth: "facebook",
     Icon: Facebook,
     color: "#1877F2",
     bgColor: "#EEF4FF",
@@ -78,13 +80,14 @@ const SOCIAL_PLATFORMS = [
     id: "x",
     label: "X (Twitter)",
     description: "Conversas em tempo real",
+    oauth: "x",
     Icon: XLogo,
     color: "#000000",
     bgColor: "#F2F2F2",
   },
 ] as const;
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
+// ── Section wrapper — mesmo padrão do Contexto da Empresa ────────────────────
 
 function Section({
   title,
@@ -99,7 +102,7 @@ function Section({
     <section className="space-y-4">
       <div>
         <h2
-          className="text-base font-semibold"
+          className="text-sm font-semibold"
           style={{ fontFamily: "var(--font-sans)" }}
         >
           {title}
@@ -118,183 +121,7 @@ function Section({
   );
 }
 
-function SubscriptionCard() {
-  const { data: subscription, isLoading } = useQuery({
-    queryKey: ["subscription"],
-    queryFn: getSubscription,
-  });
-
-  const handlePortal = async () => {
-    try {
-      const { url } = await createPortalSession();
-      window.location.href = url;
-    } catch {
-      alert("Erro ao abrir portal de cobrança. Tente novamente.");
-    }
-  };
-
-  return (
-    <div className="max-w-2xl mx-auto px-6 py-12">
-      <h1
-        className="text-2xl font-bold mb-8"
-        style={{ fontFamily: "var(--font-sans)", color: "#0a0a0a" }}
-      >
-        Configurações
-      </h1>
-
-      <section
-        className="rounded-2xl p-7"
-        style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
-      >
-        <div className="flex items-center gap-3 mb-6">
-          <CreditCard
-            size={18}
-            strokeWidth={1.8}
-            style={{ color: "#6b6760" }}
-          />
-          <h2
-            className="text-base font-semibold"
-            style={{ fontFamily: "var(--font-sans)", color: "#0a0a0a" }}
-          >
-            Assinatura
-          </h2>
-        </div>
-
-        {isLoading && (
-          <p className="text-sm" style={{ color: "#a09d98" }}>
-            Carregando...
-          </p>
-        )}
-
-        {!isLoading && !subscription && (
-          <div className="space-y-4">
-            <p className="text-sm" style={{ color: "#6b6760" }}>
-              Você não possui uma assinatura ativa.
-            </p>
-            <Link
-              href="/pricing"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold"
-              style={{
-                backgroundColor: "#0a0a0a",
-                color: "#f8f5ef",
-                fontFamily: "var(--font-body)",
-              }}
-            >
-              Ver planos
-            </Link>
-          </div>
-        )}
-
-        {!isLoading && subscription && (
-          <div className="space-y-5">
-            {subscription.status === "past_due" && (
-              <div
-                className="flex items-start gap-3 rounded-xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#fff8e6",
-                  border: "1px solid #f5c518",
-                  color: "#7a5c00",
-                }}
-              >
-                <AlertTriangle
-                  size={16}
-                  strokeWidth={2}
-                  className="mt-0.5 shrink-0"
-                />
-                <span>
-                  Seu pagamento está pendente. Atualize suas informações de
-                  pagamento para evitar interrupção do serviço.
-                </span>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div
-                className="rounded-xl p-4"
-                style={{ backgroundColor: "#f8f5ef" }}
-              >
-                <p className="text-xs mb-1" style={{ color: "#a09d98" }}>
-                  Plano atual
-                </p>
-                <p
-                  className="text-base font-semibold"
-                  style={{ color: "#0a0a0a" }}
-                >
-                  {PLAN_LABELS[subscription.plan] ?? subscription.plan}
-                </p>
-              </div>
-              <div
-                className="rounded-xl p-4"
-                style={{ backgroundColor: "#f8f5ef" }}
-              >
-                <p className="text-xs mb-1" style={{ color: "#a09d98" }}>
-                  Status
-                </p>
-                <p
-                  className="text-base font-semibold"
-                  style={{ color: "#0a0a0a" }}
-                >
-                  {STATUS_LABELS[subscription.status] ?? subscription.status}
-                </p>
-              </div>
-              <div
-                className="rounded-xl p-4"
-                style={{ backgroundColor: "#f8f5ef" }}
-              >
-                <p className="text-xs mb-1" style={{ color: "#a09d98" }}>
-                  Posts / plataforma / mês
-                </p>
-                <p
-                  className="text-base font-semibold"
-                  style={{ color: "#0a0a0a" }}
-                >
-                  {PLAN_LIMITS[subscription.plan].posts_per_platform_per_month}
-                </p>
-              </div>
-              <div
-                className="rounded-xl p-4"
-                style={{ backgroundColor: "#f8f5ef" }}
-              >
-                <p className="text-xs mb-1" style={{ color: "#a09d98" }}>
-                  Próxima cobrança
-                </p>
-                <p
-                  className="text-base font-semibold"
-                  style={{ color: "#0a0a0a" }}
-                >
-                  {new Date(subscription.current_period_end).toLocaleDateString(
-                    "pt-BR",
-                  )}
-                </p>
-              </div>
-            </div>
-
-            {subscription.cancel_at_period_end && (
-              <p className="text-sm" style={{ color: "#c0392b" }}>
-                Sua assinatura será cancelada ao final do período atual.
-              </p>
-            )}
-
-            <button
-              onClick={handlePortal}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all active:scale-[0.97]"
-              style={{
-                backgroundColor: "#0a0a0a",
-                color: "#f8f5ef",
-                fontFamily: "var(--font-body)",
-              }}
-            >
-              <ExternalLink size={14} strokeWidth={2} />
-              Gerenciar assinatura
-            </button>
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-// ─── Profile card ─────────────────────────────────────────────────────────────
+// ── Profile card ─────────────────────────────────────────────────────────────
 
 function ProfileCard({ user }: { user: User | null }) {
   const email = user?.email ?? "—";
@@ -312,9 +139,8 @@ function ProfileCard({ user }: { user: User | null }) {
       className="rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5"
       style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
     >
-      {/* Avatar */}
       <div
-        className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0"
+        className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0"
         style={{
           backgroundColor: "rgba(166,200,249,0.15)",
           color: "#a6c8f9",
@@ -324,8 +150,6 @@ function ProfileCard({ user }: { user: User | null }) {
       >
         {initials}
       </div>
-
-      {/* Info */}
       <div className="flex-1 min-w-0">
         <p
           className="text-base font-semibold truncate"
@@ -352,7 +176,7 @@ function ProfileCard({ user }: { user: User | null }) {
   );
 }
 
-// ─── Info field ───────────────────────────────────────────────────────────────
+// ── Info field row ────────────────────────────────────────────────────────────
 
 function InfoField({
   icon: Icon,
@@ -369,7 +193,7 @@ function InfoField({
       style={{ borderBottom: "1px solid #f0ede7" }}
     >
       <div
-        className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+        className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
         style={{ backgroundColor: "#f0ede7" }}
       >
         <Icon size={14} strokeWidth={1.8} style={{ color: "#8c8880" }} />
@@ -392,38 +216,36 @@ function InfoField({
   );
 }
 
-// ─── Social platform row ──────────────────────────────────────────────────────
+// ── Platform row ─────────────────────────────────────────────────────────────
 
 function PlatformRow({
   platform,
   connection,
+  isConnecting,
+  isDisconnecting,
+  onConnect,
+  onDisconnect,
 }: {
   platform: (typeof SOCIAL_PLATFORMS)[number];
   connection: SocialConnection | null;
+  isConnecting: boolean;
+  isDisconnecting: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
 }) {
   const { Icon, color, bgColor } = platform;
   const isConnected = connection !== null;
-
   return (
     <div
       className="flex items-center gap-4 px-5 py-4"
       style={{ borderBottom: "1px solid #f0ede7" }}
     >
-      {/* Icon */}
       <div
         className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
         style={{ backgroundColor: bgColor }}
       >
-        {Icon ? (
-          <Icon size={16} strokeWidth={1.8} style={{ color }} />
-        ) : (
-          <span className="text-sm font-bold" style={{ color }}>
-            Rd
-          </span>
-        )}
+        <Icon size={16} strokeWidth={1.8} style={{ color }} />
       </div>
-
-      {/* Info */}
       <div className="flex-1 min-w-0">
         <p
           className="text-sm font-medium"
@@ -435,11 +257,12 @@ function PlatformRow({
           className="text-xs"
           style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
         >
-          {isConnected ? `@${connection.accountName}` : platform.description}
+          {isConnected
+            ? `@${connection.account_name || connection.account_id}`
+            : platform.description}
         </p>
       </div>
 
-      {/* Status / action */}
       {isConnected ? (
         <div className="flex items-center gap-2 shrink-0">
           <CheckCircle2
@@ -454,63 +277,295 @@ function PlatformRow({
             Conectado
           </span>
           <button
-            disabled
-            className="ml-2 text-xs px-3 py-1.5 rounded-xl transition-all"
+            onClick={onDisconnect}
+            disabled={isDisconnecting}
+            className="ml-2 text-xs px-3 py-1.5 rounded-xl transition-all disabled:opacity-50"
             style={{
-              backgroundColor: "#f0ede7",
-              color: "#8c8880",
+              backgroundColor: "#fde8e8",
+              color: "#b91c1c",
               fontFamily: "var(--font-body)",
-              cursor: "not-allowed",
-              opacity: 0.6,
             }}
           >
-            Desconectar
+            {isDisconnecting ? "Desconectando..." : "Desconectar"}
           </button>
         </div>
       ) : (
         <button
-          disabled
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-all shrink-0"
+          onClick={onConnect}
+          disabled={isConnecting}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-all shrink-0 disabled:opacity-50"
           style={{
-            backgroundColor: "#f0ede7",
-            color: "#8c8880",
+            backgroundColor: isConnecting ? "#f0ede7" : "#0a0a0a",
+            color: isConnecting ? "#8c8880" : "#f8f5ef",
             fontFamily: "var(--font-body)",
-            cursor: "not-allowed",
           }}
-          title="Em breve"
         >
           <Link2 size={12} strokeWidth={2} />
-          Conectar
-          <span
-            className="text-[9px] px-1 py-0.5 rounded"
-            style={{ backgroundColor: "#e4e0d8", color: "#8c8880" }}
-          >
-            Em breve
-          </span>
+          {isConnecting ? "Conectando..." : "Conectar"}
         </button>
       )}
     </div>
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ── Subscription card — usa o mesmo padrão de Section com card ───────────────
+
+function SubscriptionCard() {
+  const { data: subscription, isLoading } = useQuery({
+    queryKey: ["subscription"],
+    queryFn: getSubscription,
+  });
+
+  const handlePortal = async () => {
+    try {
+      const { url } = await createPortalSession();
+      window.location.href = url;
+    } catch {
+      alert("Erro ao abrir portal de cobrança. Tente novamente.");
+    }
+  };
+
+  return (
+    <Section title="Assinatura" description="Gerencie seu plano e cobrança">
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{ border: "1.5px solid #e4e0d8" }}
+      >
+        {/* Card header */}
+        <div
+          className="flex items-center gap-3 px-5 py-4"
+          style={{
+            backgroundColor: "#f8f5ef",
+            borderBottom: "1px solid #f0ede7",
+          }}
+        >
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: "#f0ede7" }}
+          >
+            <CreditCard
+              size={18}
+              strokeWidth={1.8}
+              style={{ color: "#0a0a0a" }}
+            />
+          </div>
+          <p
+            className="text-sm font-semibold"
+            style={{ fontFamily: "var(--font-sans)" }}
+          >
+            Plano atual
+          </p>
+        </div>
+
+        <div className="px-5 py-5">
+          {isLoading && (
+            <p
+              className="text-sm"
+              style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+            >
+              Carregando...
+            </p>
+          )}
+
+          {!isLoading && !subscription && (
+            <div className="space-y-4">
+              <p
+                className="text-sm"
+                style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+              >
+                Você não possui uma assinatura ativa.
+              </p>
+              <Link
+                href="/pricing"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+                style={{
+                  backgroundColor: "#0a0a0a",
+                  color: "#f8f5ef",
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                Ver planos
+              </Link>
+            </div>
+          )}
+
+          {!isLoading && subscription && (
+            <div className="space-y-4">
+              {subscription.status === "past_due" && (
+                <div
+                  className="flex items-start gap-3 rounded-xl px-4 py-3 text-xs"
+                  style={{
+                    backgroundColor: "#fff8e6",
+                    border: "1px solid #f5c518",
+                    color: "#7a5c00",
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  <AlertTriangle
+                    size={14}
+                    strokeWidth={2}
+                    className="mt-0.5 shrink-0"
+                  />
+                  <span>
+                    Pagamento pendente. Atualize suas informações para evitar
+                    interrupção.
+                  </span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  {
+                    label: "Plano atual",
+                    value: PLAN_LABELS[subscription.plan] ?? subscription.plan,
+                  },
+                  {
+                    label: "Status",
+                    value:
+                      STATUS_LABELS[subscription.status] ?? subscription.status,
+                  },
+                  {
+                    label: "Posts / plataforma / mês",
+                    value: String(
+                      PLAN_LIMITS[subscription.plan]
+                        .posts_per_platform_per_month,
+                    ),
+                  },
+                  {
+                    label: "Próxima cobrança",
+                    value: new Date(
+                      subscription.current_period_end,
+                    ).toLocaleDateString("pt-BR"),
+                  },
+                ].map(({ label, value }) => (
+                  <div
+                    key={label}
+                    className="rounded-xl p-4"
+                    style={{ backgroundColor: "#f8f5ef" }}
+                  >
+                    <p
+                      className="text-[10px] uppercase tracking-wider mb-1"
+                      style={{
+                        color: "#8c8880",
+                        fontFamily: "var(--font-body)",
+                      }}
+                    >
+                      {label}
+                    </p>
+                    <p
+                      className="text-sm font-semibold"
+                      style={{
+                        color: "#0a0a0a",
+                        fontFamily: "var(--font-body)",
+                      }}
+                    >
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {subscription.cancel_at_period_end && (
+                <p
+                  className="text-xs"
+                  style={{ color: "#b91c1c", fontFamily: "var(--font-body)" }}
+                >
+                  Sua assinatura será cancelada ao final do período atual.
+                </p>
+              )}
+
+              <button
+                onClick={handlePortal}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+                style={{
+                  backgroundColor: "#0a0a0a",
+                  color: "#f8f5ef",
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                <ExternalLink size={14} strokeWidth={2} />
+                Gerenciar assinatura
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
-
-  // TODO: fetch social connections from API when backend is ready
-  // const connections: SocialConnection[] = [];
-  const connections: SocialConnection[] = [];
+  const [connections, setConnections] = useState<SocialConnection[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(true);
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
+  const [connectingNetwork, setConnectingNetwork] =
+    useState<SocialNetwork | null>(null);
+  const [disconnectingConnectionId, setDisconnectingConnectionId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-    });
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    getSocialConnections()
+      .then((data) => {
+        setConnections(data);
+        setConnectionsError(null);
+      })
+      .catch((error: unknown) =>
+        setConnectionsError(
+          error instanceof Error ? error.message : "Falha ao carregar conexões",
+        ),
+      )
+      .finally(() => setConnectionsLoading(false));
   }, []);
 
-  function getConnection(platformId: string): SocialConnection | null {
-    return connections.find((c) => c.platformId === platformId) ?? null;
+  const latestConnectionsByNetwork = useMemo(() => {
+    const sorted = [...connections].sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    );
+    const grouped = new Map<SocialNetwork, SocialConnection>();
+    sorted.forEach((c) => {
+      if (!grouped.has(c.network)) grouped.set(c.network, c);
+    });
+    return grouped;
+  }, [connections]);
+
+  const getConnection = (platformId: string) =>
+    latestConnectionsByNetwork.get(platformId as SocialNetwork) ?? null;
+
+  async function handleConnect(platform: (typeof SOCIAL_PLATFORMS)[number]) {
+    setConnectingNetwork(platform.oauth as SocialNetwork);
+    try {
+      const authURL = await startSocialOAuth(platform.oauth);
+      window.location.href = authURL;
+    } catch (error) {
+      setConnectionsError(
+        error instanceof Error ? error.message : "Falha ao iniciar OAuth",
+      );
+      setConnectingNetwork(null);
+    }
+  }
+
+  async function handleDisconnect(connection: SocialConnection) {
+    setDisconnectingConnectionId(connection.id);
+    try {
+      await deleteSocialConnection(connection.id);
+      setConnections((prev) =>
+        prev.filter((item) => item.id !== connection.id),
+      );
+      setConnectionsError(null);
+    } catch (error) {
+      setConnectionsError(
+        error instanceof Error ? error.message : "Falha ao desconectar conta",
+      );
+    } finally {
+      setDisconnectingConnectionId(null);
+    }
   }
 
   const connectedCount = SOCIAL_PLATFORMS.filter(
@@ -518,24 +573,26 @@ export default function SettingsPage() {
   ).length;
 
   return (
-    <div className="px-6 py-8 max-w-2xl mx-auto space-y-10 pb-24 md:pb-8">
-      {/* Header */}
-      <div>
-        <h1
-          className="text-3xl font-bold tracking-tight"
-          style={{ fontFamily: "var(--font-sans)" }}
-        >
-          Configurações
-        </h1>
-        <p
-          className="text-sm mt-1"
-          style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
-        >
-          Gerencie sua conta e conexões
-        </p>
+    <div className="px-6 py-8 max-w-6xl mx-auto space-y-8 pb-24 md:pb-8">
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1
+            className="text-3xl font-bold tracking-tight"
+            style={{ fontFamily: "var(--font-sans)" }}
+          >
+            Configurações
+          </h1>
+          <p
+            className="text-sm mt-1"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
+            Gerencie sua conta, conexões sociais e preferências.
+          </p>
+        </div>
       </div>
 
-      {/* Profile */}
+      {/* ── Perfil ── */}
       <Section title="Perfil" description="Informações da sua conta Postable">
         <ProfileCard user={user} />
 
@@ -551,7 +608,7 @@ export default function SettingsPage() {
           <InfoField icon={Mail} label="E-mail" value={user?.email ?? "—"} />
           <div className="flex items-center gap-4 px-5 py-4">
             <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
               style={{ backgroundColor: "#f0ede7" }}
             >
               <Shield
@@ -576,13 +633,11 @@ export default function SettingsPage() {
             </div>
             <button
               disabled
-              className="text-xs px-3 py-1.5 rounded-xl shrink-0"
+              className="text-xs px-3 py-1.5 rounded-xl shrink-0 disabled:opacity-50"
               style={{
                 backgroundColor: "#f0ede7",
                 color: "#8c8880",
                 fontFamily: "var(--font-body)",
-                cursor: "not-allowed",
-                opacity: 0.6,
               }}
             >
               Alterar
@@ -591,15 +646,31 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      {/* Social connections */}
+      {/* ── Conexões ── */}
       <Section
-        title="Conexões"
+        title="Conexões sociais"
         description={
-          connectedCount === 0
-            ? "Conecte suas contas para publicar e monitorar métricas"
-            : `${connectedCount} de ${SOCIAL_PLATFORMS.length} contas conectadas`
+          connectionsLoading
+            ? "Carregando conexões..."
+            : connectedCount === 0
+              ? "Conecte suas contas para publicar e monitorar métricas"
+              : `${connectedCount} de ${SOCIAL_PLATFORMS.length} contas conectadas`
         }
       >
+        {connectionsError && (
+          <div
+            className="rounded-xl px-4 py-3 text-xs"
+            style={{
+              backgroundColor: "#fde8e8",
+              border: "1px solid #f5c2c2",
+              color: "#b91c1c",
+              fontFamily: "var(--font-body)",
+            }}
+          >
+            {connectionsError}
+          </div>
+        )}
+
         <div
           className="rounded-2xl overflow-hidden"
           style={{ border: "1.5px solid #e4e0d8" }}
@@ -630,31 +701,36 @@ export default function SettingsPage() {
               key={platform.id}
               platform={platform}
               connection={getConnection(platform.id)}
+              isConnecting={connectingNetwork === platform.oauth}
+              isDisconnecting={
+                disconnectingConnectionId === getConnection(platform.id)?.id
+              }
+              onConnect={() => void handleConnect(platform)}
+              onDisconnect={() => {
+                const c = getConnection(platform.id);
+                if (c) void handleDisconnect(c);
+              }}
             />
           ))}
 
-          {/* Footer note */}
           <div className="px-5 py-3" style={{ backgroundColor: "#f8f5ef" }}>
             <p
               className="text-[10px]"
               style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
             >
-              A integração com redes sociais será disponibilizada em breve. Você
-              receberá uma notificação quando estiver disponível.
+              A conexão OAuth é utilizada para publicar na aba Social com a
+              conta correta.
             </p>
           </div>
         </div>
       </Section>
 
-      {/* Brand setup shortcut */}
+      {/* ── Marca ── */}
       <Section title="Marca" description="Ajuste as informações da sua marca">
         <a
           href="/brand-setup"
-          className="flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group"
-          style={{
-            backgroundColor: "#ffffff",
-            border: "1.5px solid #e4e0d8",
-          }}
+          className="flex items-center gap-4 px-5 py-4 rounded-2xl transition-all"
+          style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
         >
           <div
             className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
@@ -683,6 +759,8 @@ export default function SettingsPage() {
           />
         </a>
       </Section>
+
+      {/* ── Assinatura ── */}
       <SubscriptionCard />
     </div>
   );
