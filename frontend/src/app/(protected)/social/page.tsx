@@ -6,6 +6,7 @@ import {
   getSocialConnections,
   getSocialJobs,
   publishSocialPost,
+  uploadSocialMedia,
   type SocialConnection,
   type SocialJob,
   type SocialNetwork,
@@ -16,17 +17,21 @@ import {
   CheckCircle,
   ChevronDown,
   Facebook,
+  ImageIcon,
   Instagram,
   Linkedin,
   Loader2,
   Lock,
   Radio,
   Send,
+  Upload,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type ElementType,
@@ -125,16 +130,24 @@ export default function SocialPage() {
   const [isPending, startTransition] = useTransition();
   const [publishForm, setPublishForm] = useState({
     network: "instagram" as SocialNetwork,
-    deliveryMode: "now" as "now" | "schedule",
     connectionId: "",
     source: "manual" as "manual" | "generated",
     postId: "",
     title: "",
     text: "",
     link: "",
-    mediaUrls: "",
     publishAt: "",
   });
+  const [mediaFileItems, setMediaFileItems] = useState<
+    {
+      id: string;
+      name: string;
+      url?: string;
+      uploading: boolean;
+      error?: string;
+    }[]
+  >([]);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
 
   const filteredConnections = useMemo(
     () =>
@@ -208,6 +221,36 @@ export default function SocialPage() {
     });
   }
 
+  async function handleMediaSelect(files: File[]) {
+    for (const file of files) {
+      const id = `${Date.now()}-${Math.random()}`;
+      setMediaFileItems((prev) => [
+        ...prev,
+        { id, name: file.name, uploading: true },
+      ]);
+      try {
+        const url = await uploadSocialMedia(file);
+        setMediaFileItems((prev) =>
+          prev.map((item) =>
+            item.id === id ? { ...item, url, uploading: false } : item,
+          ),
+        );
+      } catch (err) {
+        setMediaFileItems((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  uploading: false,
+                  error: err instanceof Error ? err.message : "Falha no upload",
+                }
+              : item,
+          ),
+        );
+      }
+    }
+  }
+
   async function handlePublishSubmit(deliveryMode: "now" | "schedule") {
     if (!hasAnyConnections) {
       setFeedback({
@@ -237,23 +280,20 @@ export default function SocialPage() {
       });
       return;
     }
-    if (
-      publishForm.network === "instagram" &&
-      publishForm.mediaUrls
-        .split("\n")
-        .map((item) => item.trim())
-        .filter(Boolean).length === 0
-    ) {
+    const uploadedMediaUrls = mediaFileItems
+      .filter((item) => item.url)
+      .map((item) => item.url!);
+    if (publishForm.network === "instagram" && uploadedMediaUrls.length === 0) {
       setFeedback({
         tone: "error",
-        text: "No Instagram, informe ao menos uma URL publica de midia.",
+        text: "No Instagram, adicione ao menos uma imagem.",
       });
       return;
     }
     if (deliveryMode === "schedule" && !publishForm.publishAt) {
       setFeedback({
         tone: "error",
-        text: "Escolha data e horario para agendar.",
+        text: "Escolha data e horário para agendar.",
       });
       return;
     }
@@ -272,10 +312,7 @@ export default function SocialPage() {
             ? publishForm.text || undefined
             : undefined,
         link: publishForm.link || undefined,
-        media_urls: publishForm.mediaUrls
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
+        media_urls: uploadedMediaUrls,
         publish_at:
           deliveryMode === "schedule" && publishForm.publishAt
             ? new Date(publishForm.publishAt).toISOString()
@@ -290,14 +327,13 @@ export default function SocialPage() {
       });
       setPublishForm((current) => ({
         ...current,
-        deliveryMode: "now",
         title: "",
         text: "",
         link: "",
-        mediaUrls: "",
         publishAt: "",
         postId: "",
       }));
+      setMediaFileItems([]);
       refreshData();
     } catch (error) {
       setFeedback({
@@ -341,7 +377,11 @@ export default function SocialPage() {
       </div>
 
       {feedback && (
-        <div className={feedback.tone === "success" ? "banner-success" : "banner-error"}>
+        <div
+          className={
+            feedback.tone === "success" ? "banner-success" : "banner-error"
+          }
+        >
           {feedback.text}
         </div>
       )}
@@ -355,7 +395,9 @@ export default function SocialPage() {
               Escolha uma conta conectada e dispare agora ou no horário exato.
             </p>
           </div>
-          {isPending && <Loader2 className="animate-spin text-muted-foreground" size={18} />}
+          {isPending && (
+            <Loader2 className="animate-spin text-muted-foreground" size={18} />
+          )}
         </div>
 
         {/* Rede ativa */}
@@ -381,49 +423,6 @@ export default function SocialPage() {
                 : "transition-all"
             }
           >
-            {/* Modo de envio */}
-            <div
-              className="rounded-2xl p-3 mb-3 bg-background border border-border"
-              style={{ opacity: publishBlocked ? 0.7 : 1 }}
-            >
-              <p className="text-xs font-medium text-muted-foreground mb-2">Modo de envio</p>
-              <div className="pill-bar w-fit">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPublishForm((current) => ({
-                      ...current,
-                      deliveryMode: "now",
-                      publishAt: "",
-                    }))
-                  }
-                  className={`pill-item ${
-                    publishForm.deliveryMode === "now"
-                      ? "pill-item-active"
-                      : "pill-item-inactive"
-                  }`}
-                >
-                  Publicar agora
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPublishForm((current) => ({
-                      ...current,
-                      deliveryMode: "schedule",
-                    }))
-                  }
-                  className={`pill-item ${
-                    publishForm.deliveryMode === "schedule"
-                      ? "pill-item-active"
-                      : "pill-item-inactive"
-                  }`}
-                >
-                  Agendar
-                </button>
-              </div>
-            </div>
-
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -543,55 +542,134 @@ export default function SocialPage() {
 
               {(publishForm.network === "instagram" ||
                 publishForm.network === "facebook") && (
-                <textarea
-                  value={publishForm.mediaUrls}
+                <div className="space-y-2">
+                  <div
+                    className="rounded-2xl border-2 border-dashed border-border p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-foreground/40 transition-colors"
+                    onClick={() => mediaInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const files = Array.from(e.dataTransfer.files).filter(
+                        (f) => f.type.startsWith("image/"),
+                      );
+                      if (files.length > 0) void handleMediaSelect(files);
+                    }}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
+                      <Upload size={18} className="text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      Adicionar imagem
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Clique ou arraste um arquivo (jpeg, png, webp)
+                    </p>
+                    <input
+                      ref={mediaInputRef}
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (files.length > 0) void handleMediaSelect(files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                  {mediaFileItems.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {mediaFileItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="relative rounded-xl overflow-hidden border border-border"
+                          style={{ aspectRatio: "1" }}
+                        >
+                          {item.url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.url}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-secondary">
+                              {item.uploading ? (
+                                <Loader2
+                                  size={16}
+                                  className="animate-spin text-muted-foreground"
+                                />
+                              ) : (
+                                <ImageIcon
+                                  size={16}
+                                  className="text-muted-foreground"
+                                />
+                              )}
+                              {item.error && (
+                                <p className="text-[10px] text-red-500 text-center px-1">
+                                  {item.error}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {!item.uploading && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMediaFileItems((prev) =>
+                                  prev.filter((f) => f.id !== item.id),
+                                )
+                              }
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-foreground/70 flex items-center justify-center"
+                            >
+                              <X size={10} className="text-background" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <input
+                  type="datetime-local"
+                  value={publishForm.publishAt}
                   onChange={(event) =>
                     setPublishForm((current) => ({
                       ...current,
-                      mediaUrls: event.target.value,
+                      publishAt: event.target.value,
                     }))
                   }
-                  placeholder="Uma URL pública de mídia por linha"
-                  rows={4}
-                  className="textarea-field"
+                  className="input-field"
+                  placeholder="Agendar para (opcional)"
                 />
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 items-center">
-                {publishForm.deliveryMode === "schedule" ? (
-                  <input
-                    type="datetime-local"
-                    value={publishForm.publishAt}
-                    onChange={(event) =>
-                      setPublishForm((current) => ({
-                        ...current,
-                        publishAt: event.target.value,
-                      }))
-                    }
-                    className="input-field"
-                  />
-                ) : (
-                  <div className="rounded-2xl px-4 py-3 text-sm text-muted-foreground bg-background border border-dashed border-border">
-                    Envio imediato habilitado.
-                  </div>
-                )}
-                <button
-                  type="submit"
-                  disabled={publishBlocked}
-                  className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <Send size={15} />
-                  Publicar agora
-                </button>
-                <button
-                  type="button"
-                  disabled={publishBlocked}
-                  onClick={() => { void handlePublishSubmit("schedule"); }}
-                  className="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <Radio size={15} />
-                  Agendar
-                </button>
+                <p className="text-xs text-muted-foreground">
+                  Preencha a data para agendar, ou deixe vazio para publicar
+                  agora.
+                </p>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    type="submit"
+                    disabled={publishBlocked}
+                    className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Send size={15} />
+                    Publicar agora
+                  </button>
+                  <button
+                    type="button"
+                    disabled={publishBlocked}
+                    onClick={() => {
+                      void handlePublishSubmit("schedule");
+                    }}
+                    className="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Radio size={15} />
+                    Agendar
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -652,7 +730,9 @@ export default function SocialPage() {
 
         <div className="space-y-3">
           {jobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum job criado ainda.</p>
+            <p className="text-sm text-muted-foreground">
+              Nenhum job criado ainda.
+            </p>
           ) : (
             visibleJobs.map((job) => (
               <div
@@ -687,11 +767,16 @@ export default function SocialPage() {
                     </div>
                     <p className="text-sm mt-2 text-foreground">
                       {job.payload.title ? `${job.payload.title} • ` : ""}
-                      {job.payload.text?.slice(0, 140) || "Post sem preview textual"}
+                      {job.payload.text?.slice(0, 140) ||
+                        "Post sem preview textual"}
                     </p>
                     {job.status === "failed" && job.error_message && (
                       <div className="flex items-start gap-2 mt-2 rounded-xl px-3 py-2 text-xs banner-error">
-                        <AlertTriangle size={12} strokeWidth={2} className="mt-0.5 shrink-0" />
+                        <AlertTriangle
+                          size={12}
+                          strokeWidth={2}
+                          className="mt-0.5 shrink-0"
+                        />
                         <span>{job.error_message}</span>
                       </div>
                     )}
