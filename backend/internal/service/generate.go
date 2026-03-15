@@ -121,7 +121,17 @@ func (s *GenerateService) StreamAndReturn(ctx context.Context, brandJSON string,
 			return nil, agentErr
 		case line, open := <-messageChan:
 			if !open {
-				fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"content-generation\",\"status\":\"complete\"}\n\n")
+				// Emit synthetic completion events for stages that happen inside the LLM
+				// without explicit tool calls (strategy formulation + caption writing).
+				fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"image-generation\",\"status\":\"complete\"}\n\n")
+				flusher.Flush()
+				fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"strategy\",\"status\":\"started\"}\n\n")
+				flusher.Flush()
+				fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"strategy\",\"status\":\"complete\"}\n\n")
+				flusher.Flush()
+				fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"caption\",\"status\":\"started\"}\n\n")
+				flusher.Flush()
+				fmt.Fprintf(w, "event: progress\ndata: {\"stage\":\"caption\",\"status\":\"complete\"}\n\n")
 				flusher.Flush()
 				return finalPayload, nil
 			}

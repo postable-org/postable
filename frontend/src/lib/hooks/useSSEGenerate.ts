@@ -129,9 +129,14 @@ export function useSSEGenerate(onComplete: (content: PostContent) => void): UseS
       if (eventType === 'progress') {
         try {
           const parsed = JSON.parse(dataStr) as Record<string, unknown>;
-          const stage = parsed.stage as string;
-          if (parsed.status === 'complete') {
-            setProgressMessage(STAGE_LABELS[stage] ? `${STAGE_LABELS[stage]} ✓` : '');
+          const stage = parsed.stage as GenerationStage;
+          const s = parsed.status as StageState['status'];
+          const msg = (parsed.message as string) || STAGE_LABELS[stage ?? ''] || '';
+          setStageState({ stage, status: s, message: msg });
+          if (s === 'complete') {
+            setProgressMessage(STAGE_LABELS[stage ?? ''] ? `${STAGE_LABELS[stage ?? '']} ✓` : '');
+          } else {
+            setProgressMessage(msg || STAGE_LABELS[stage ?? ''] || '');
           }
         } catch { /* ignore */ }
         return;
