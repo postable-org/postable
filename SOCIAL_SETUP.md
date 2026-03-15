@@ -23,10 +23,6 @@ FACEBOOK_APP_SECRET=seu_app_secret
 LINKEDIN_CLIENT_ID=
 LINKEDIN_CLIENT_SECRET=
 
-# Reddit (opcional)
-REDDIT_CLIENT_ID=
-REDDIT_CLIENT_SECRET=
-
 # X (opcional)
 X_CLIENT_ID=
 # opcional para apps confidenciais
@@ -83,16 +79,20 @@ O X já suporta conexão via OAuth oficial:
 
 1. Vá em [developer.x.com](https://developer.x.com) e crie um app com **User authentication (OAuth 2.0)**.
 2. Configure o callback URI para: `{API_BASE_URL}/api/social/oauth/x/callback`.
-3. No backend, configure `X_CLIENT_ID` (e opcionalmente `X_CLIENT_SECRET`) no `.env`.
+3. Use os escopos: `tweet.read tweet.write users.read offline.access`.
+4. No backend, configure `X_CLIENT_ID` (e opcionalmente `X_CLIENT_SECRET`) no `.env`.
 4. No Postable, abra **Social** → **X** e clique em **Conectar X via OAuth oficial**.
 5. Autorize o app e aguarde o redirecionamento de volta para `/social`.
 
-### LinkedIn e Reddit
+### LinkedIn
 
-Configure `LINKEDIN_CLIENT_ID`/`LINKEDIN_CLIENT_SECRET` e `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` no `.env`, e cadastre os redirect URIs nos dashboards respectivos:
+1. Crie um app em [LinkedIn Developers](https://www.linkedin.com/developers/).
+2. Adicione o produto de login compatível com OpenID Connect e o produto de compartilhamento no LinkedIn.
+3. Cadastre o redirect URI: `{API_BASE_URL}/api/social/oauth/linkedin/callback`.
+4. Garanta os escopos: `openid profile email w_member_social`.
+5. Configure `LINKEDIN_CLIENT_ID` e `LINKEDIN_CLIENT_SECRET` no `.env`.
 
 - LinkedIn: `{API_BASE_URL}/api/social/oauth/linkedin/callback`
-- Reddit: `{API_BASE_URL}/api/social/oauth/reddit/callback`
 
 ---
 

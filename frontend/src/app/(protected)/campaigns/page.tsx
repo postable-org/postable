@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-type PlatformId = "instagram" | "linkedin" | "facebook" | "x" | "reddit";
+type PlatformId = "instagram" | "linkedin" | "facebook" | "x";
 type CampaignStatus = "draft" | "active" | "paused" | "completed";
 
 interface Campaign {
@@ -33,7 +33,6 @@ const PLATFORMS: { id: PlatformId; label: string; color: string }[] = [
   { id: "linkedin", label: "LinkedIn", color: "#0A66C2" },
   { id: "facebook", label: "Facebook", color: "#1877F2" },
   { id: "x", label: "X", color: "#000000" },
-  { id: "reddit", label: "Reddit", color: "#FF4500" },
 ];
 
 const STATUS_CONFIG: Record<

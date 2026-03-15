@@ -1,19 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import {
-  TrendingUp,
-  Users,
-  Heart,
-  MessageCircle,
-  Share2,
-  Eye,
   Activity,
   Award,
-  Link2,
   BarChart3,
+  Eye,
+  Heart,
+  Link2,
+  MessageCircle,
+  Share2,
+  TrendingUp,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 // ─── Types (ready for backend) ────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ export interface AnalyticsOverview {
   totalEngagements: number;
   engagementRate: number;
   totalPostsPublished: number;
-  reachTrend: number;       // percentage change vs previous period
+  reachTrend: number; // percentage change vs previous period
   engagementTrend: number;
   rateTrend: number;
 }
@@ -68,7 +68,6 @@ const PLATFORM_COLORS: Record<string, string> = {
   linkedin: "#0A66C2",
   facebook: "#1877F2",
   x: "#000000",
-  reddit: "#FF4500",
 };
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -254,7 +253,6 @@ function PlatformBreakdown() {
     { id: "linkedin", label: "LinkedIn", color: PLATFORM_COLORS.linkedin },
     { id: "facebook", label: "Facebook", color: PLATFORM_COLORS.facebook },
     { id: "x", label: "X (Twitter)", color: PLATFORM_COLORS.x },
-    { id: "reddit", label: "Reddit", color: PLATFORM_COLORS.reddit },
   ];
 
   return (
@@ -358,7 +356,11 @@ export default function AnalyticsPage() {
               className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
               style={{ backgroundColor: "#e4e0d8" }}
             >
-              <TrendingUp size={15} strokeWidth={1.8} style={{ color: "#8c8880" }} />
+              <TrendingUp
+                size={15}
+                strokeWidth={1.8}
+                style={{ color: "#8c8880" }}
+              />
             </div>
             <div>
               <p
@@ -392,10 +394,30 @@ export default function AnalyticsPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="Alcance total" icon={Eye} accent="#6366F1" empty={!isConnected} />
-        <KpiCard label="Engajamentos" icon={Heart} accent="#E1306C" empty={!isConnected} />
-        <KpiCard label="Taxa de engajamento" icon={Activity} accent="#10B981" empty={!isConnected} />
-        <KpiCard label="Posts publicados" icon={Award} accent="#D97706" empty={!isConnected} />
+        <KpiCard
+          label="Alcance total"
+          icon={Eye}
+          accent="#6366F1"
+          empty={!isConnected}
+        />
+        <KpiCard
+          label="Engajamentos"
+          icon={Heart}
+          accent="#E1306C"
+          empty={!isConnected}
+        />
+        <KpiCard
+          label="Taxa de engajamento"
+          icon={Activity}
+          accent="#10B981"
+          empty={!isConnected}
+        />
+        <KpiCard
+          label="Posts publicados"
+          icon={Award}
+          accent="#D97706"
+          empty={!isConnected}
+        />
       </div>
 
       {/* Chart + platform breakdown */}
@@ -417,7 +439,10 @@ export default function AnalyticsPage() {
                 { color: "#E1306C", label: "Engajamento" },
               ].map(({ color, label }) => (
                 <div key={label} className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                  <div
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: color }}
+                  />
                   <span
                     className="text-[10px]"
                     style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
@@ -462,7 +487,10 @@ export default function AnalyticsPage() {
           <div
             key={label}
             className="rounded-2xl p-4 flex items-center gap-3"
-            style={{ backgroundColor: "#ffffff", border: "1.5px solid #e4e0d8" }}
+            style={{
+              backgroundColor: "#ffffff",
+              border: "1.5px solid #e4e0d8",
+            }}
           >
             <div
               className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"

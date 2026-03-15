@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -34,7 +35,7 @@ func (h *SocialOAuthHandler) Start(w http.ResponseWriter, r *http.Request) {
 	authURL, err := h.svc.StartAuthorization(r.Context(), userID, network)
 	if err != nil {
 		status := http.StatusBadRequest
-		if err == service.ErrOAuthNotConfigured {
+		if errors.Is(err, service.ErrOAuthNotConfigured) {
 			status = http.StatusNotImplemented
 		}
 		writeJSON(w, status, map[string]string{"error": err.Error()})

@@ -84,9 +84,9 @@ func (s *SocialOAuthService) StartAuthorization(ctx context.Context, userID, net
 
 	switch network {
 	case SocialNetworkLinkedIn:
-		clientID := os.Getenv("LINKEDIN_CLIENT_ID")
+		clientID := strings.TrimSpace(os.Getenv("LINKEDIN_CLIENT_ID"))
 		if clientID == "" {
-			return "", ErrOAuthNotConfigured
+			return "", missingOAuthConfig("linkedin", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET")
 		}
 		query := url.Values{}
 		query.Set("response_type", "code")
@@ -95,23 +95,10 @@ func (s *SocialOAuthService) StartAuthorization(ctx context.Context, userID, net
 		query.Set("state", state)
 		query.Set("scope", "openid profile email w_member_social")
 		return "https://www.linkedin.com/oauth/v2/authorization?" + query.Encode(), nil
-	case SocialNetworkReddit:
-		clientID := os.Getenv("REDDIT_CLIENT_ID")
-		if clientID == "" {
-			return "", ErrOAuthNotConfigured
-		}
-		query := url.Values{}
-		query.Set("client_id", clientID)
-		query.Set("response_type", "code")
-		query.Set("state", state)
-		query.Set("redirect_uri", s.callbackURL(network))
-		query.Set("duration", "permanent")
-		query.Set("scope", "identity submit")
-		return "https://www.reddit.com/api/v1/authorize?" + query.Encode(), nil
 	case SocialNetworkFacebook, SocialNetworkInstagram:
 		appID := os.Getenv("FACEBOOK_APP_ID")
 		if appID == "" {
-			return "", ErrOAuthNotConfigured
+			return "", missingOAuthConfig("facebook", "FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET")
 		}
 		query := url.Values{}
 		query.Set("client_id", appID)
@@ -130,7 +117,7 @@ func (s *SocialOAuthService) StartAuthorization(ctx context.Context, userID, net
 	case SocialNetworkX:
 		clientID := strings.TrimSpace(os.Getenv("X_CLIENT_ID"))
 		if clientID == "" {
-			return "", ErrOAuthNotConfigured
+			return "", missingOAuthConfig("x", "X_CLIENT_ID")
 		}
 		query := url.Values{}
 		query.Set("response_type", "code")
@@ -161,11 +148,6 @@ func (s *SocialOAuthService) HandleCallback(ctx context.Context, network, code, 
 			return s.errorRedirect(network, err.Error()), err
 		}
 		return s.successRedirect(network, "LinkedIn conectado com sucesso"), nil
-	case SocialNetworkReddit:
-		if err := s.completeRedditOAuth(ctx, payload.UserID, code); err != nil {
-			return s.errorRedirect(network, err.Error()), err
-		}
-		return s.successRedirect(network, "Reddit conectado com sucesso"), nil
 	case SocialNetworkFacebook:
 		connected, err := s.completeMetaOAuth(ctx, payload.UserID, code)
 		if err != nil {
@@ -186,7 +168,7 @@ func (s *SocialOAuthService) HandleCallback(ctx context.Context, network, code, 
 func (s *SocialOAuthService) completeXOAuth(ctx context.Context, userID, code, codeVerifier string) error {
 	clientID := strings.TrimSpace(os.Getenv("X_CLIENT_ID"))
 	if clientID == "" {
-		return ErrOAuthNotConfigured
+		return missingOAuthConfig("x", "X_CLIENT_ID")
 	}
 	if strings.TrimSpace(codeVerifier) == "" {
 		return ErrOAuthStateInvalid
@@ -270,10 +252,10 @@ func (s *SocialOAuthService) completeXOAuth(ctx context.Context, userID, code, c
 }
 
 func (s *SocialOAuthService) completeLinkedInOAuth(ctx context.Context, userID, code string) error {
-	clientID := os.Getenv("LINKEDIN_CLIENT_ID")
-	clientSecret := os.Getenv("LINKEDIN_CLIENT_SECRET")
+	clientID := strings.TrimSpace(os.Getenv("LINKEDIN_CLIENT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("LINKEDIN_CLIENT_SECRET"))
 	if clientID == "" || clientSecret == "" {
-		return ErrOAuthNotConfigured
+		return missingOAuthConfig("linkedin", "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET")
 	}
 	token, err := s.exchangeFormToken(ctx, "https://www.linkedin.com/oauth/v2/accessToken", url.Values{
 		"grant_type":    []string{"authorization_code"},
@@ -495,7 +477,7 @@ func (s *SocialOAuthService) signState(userID, network string) (string, error) {
 
 func (s *SocialOAuthService) signStateWithVerifier(userID, network, codeVerifier string) (string, error) {
 	if len(s.stateSecret) == 0 {
-		return "", ErrOAuthNotConfigured
+		return "", missingOAuthConfig("oauth", "SOCIAL_OAUTH_STATE_SECRET")
 	}
 	payload := oauthStatePayload{
 		UserID:       userID,
@@ -511,6 +493,13 @@ func (s *SocialOAuthService) signStateWithVerifier(userID, network, codeVerifier
 	mac.Write(encoded)
 	sig := mac.Sum(nil)
 	return base64.RawURLEncoding.EncodeToString(encoded) + "." + base64.RawURLEncoding.EncodeToString(sig), nil
+}
+
+func missingOAuthConfig(network string, envVars ...string) error {
+	if len(envVars) == 0 {
+		return ErrOAuthNotConfigured
+	}
+	return fmt.Errorf("%s oauth is not configured; set %s: %w", network, strings.Join(envVars, ", "), ErrOAuthNotConfigured)
 }
 
 func (s *SocialOAuthService) verifyState(state string) (*oauthStatePayload, error) {

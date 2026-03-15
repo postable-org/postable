@@ -1,18 +1,25 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { getPosts } from "@/lib/api/posts";
-import type { Post, PostContent } from "@/lib/api/posts";
 import { GenerateButton } from "@/components/dashboard/GenerateButton";
 import { PostCard } from "@/components/dashboard/PostCard";
-import { LayoutGrid, List, Calendar, Instagram, Linkedin, Facebook, Twitter } from "lucide-react";
+import type { Post, PostContent } from "@/lib/api/posts";
+import { getPosts } from "@/lib/api/posts";
+import {
+  Calendar,
+  Facebook,
+  Instagram,
+  LayoutGrid,
+  Linkedin,
+  List,
+  Twitter,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const PLATFORMS = [
   { id: "instagram", label: "Instagram", Icon: Instagram, color: "#E1306C" },
   { id: "linkedin", label: "LinkedIn", Icon: Linkedin, color: "#0A66C2" },
   { id: "facebook", label: "Facebook", Icon: Facebook, color: "#1877F2" },
   { id: "x", label: "X", Icon: Twitter, color: "#000000" },
-  { id: "reddit", label: "Reddit", Icon: null, color: "#FF4500" },
 ];
 
 type ViewMode = "list" | "grid" | "calendar";
@@ -30,11 +37,15 @@ export default function PostsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [activePlatform, setActivePlatform] = useState("instagram");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "pending" | "approved" | "rejected"
+  >("all");
   const triggerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    getPosts().then(setPosts).catch(() => {});
+    getPosts()
+      .then(setPosts)
+      .catch(() => {});
   }, []);
 
   const handleGenerated = useCallback(async (content: PostContent) => {
@@ -56,11 +67,9 @@ export default function PostsPage() {
 
   const handleStatusChange = useCallback(
     (id: string, status: "approved" | "rejected") => {
-      setPosts((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status } : p))
-      );
+      setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, status } : p)));
     },
-    []
+    [],
   );
 
   const handleRegenerate = useCallback((id: string) => {
@@ -69,11 +78,17 @@ export default function PostsPage() {
   }, []);
 
   const filteredPosts =
-    statusFilter === "all" ? posts : posts.filter((p) => p.status === statusFilter);
+    statusFilter === "all"
+      ? posts
+      : posts.filter((p) => p.status === statusFilter);
 
   const grouped = groupByDate(filteredPosts);
   const dates = Array.from(
-    new Set(filteredPosts.map((p) => new Date(p.created_at).toLocaleDateString("pt-BR")))
+    new Set(
+      filteredPosts.map((p) =>
+        new Date(p.created_at).toLocaleDateString("pt-BR"),
+      ),
+    ),
   );
 
   return (
@@ -109,7 +124,11 @@ export default function PostsPage() {
               }}
             >
               {Icon ? (
-                <Icon size={14} strokeWidth={1.8} style={{ color: active ? color : "#8c8880" }} />
+                <Icon
+                  size={14}
+                  strokeWidth={1.8}
+                  style={{ color: active ? color : "#8c8880" }}
+                />
               ) : (
                 <span
                   className="text-[11px] font-bold"
@@ -152,14 +171,15 @@ export default function PostsPage() {
         </div>
 
         {/* View mode */}
-        <div className="flex items-center gap-0.5 p-1 rounded-xl" style={{ backgroundColor: "#f0ede7" }}>
-          {(
-            [
-              { id: "grid" as const, Icon: LayoutGrid },
-              { id: "list" as const, Icon: List },
-              { id: "calendar" as const, Icon: Calendar },
-            ]
-          ).map(({ id, Icon }) => (
+        <div
+          className="flex items-center gap-0.5 p-1 rounded-xl"
+          style={{ backgroundColor: "#f0ede7" }}
+        >
+          {[
+            { id: "grid" as const, Icon: LayoutGrid },
+            { id: "list" as const, Icon: List },
+            { id: "calendar" as const, Icon: Calendar },
+          ].map(({ id, Icon }) => (
             <button
               key={id}
               onClick={() => setViewMode(id)}
@@ -188,7 +208,9 @@ export default function PostsPage() {
         <span className="font-semibold" style={{ color: "#0a0a0a" }}>
           {PLATFORMS.find((p) => p.id === activePlatform)?.label}
         </span>
-        <span className="ml-auto opacity-60">O filtro por plataforma será disponível em breve</span>
+        <span className="ml-auto opacity-60">
+          O filtro por plataforma será disponível em breve
+        </span>
       </div>
 
       {/* Posts */}
@@ -197,7 +219,10 @@ export default function PostsPage() {
           className="rounded-2xl p-14 text-center"
           style={{ border: "1.5px dashed #e4e0d8" }}
         >
-          <p className="text-sm" style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}>
+          <p
+            className="text-sm"
+            style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+          >
             Nenhum post encontrado. Gere seu primeiro post!
           </p>
         </div>

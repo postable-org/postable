@@ -2,33 +2,32 @@
 
 import { getPosts, type Post } from "@/lib/api/posts";
 import {
-  deleteSocialConnection,
-  getSocialConnections,
-  getSocialJobs,
-  publishSocialPost,
-  startSocialOAuth,
-  type SocialConnection,
-  type SocialJob,
-  type SocialNetwork,
+    deleteSocialConnection,
+    getSocialConnections,
+    getSocialJobs,
+    publishSocialPost,
+    startSocialOAuth,
+    type SocialConnection,
+    type SocialJob,
+    type SocialNetwork,
 } from "@/lib/api/social";
 import {
-  CheckCircle,
-  Facebook,
-  Instagram,
-  Linkedin,
-  Loader2,
-  Radio,
-  Send,
-  Trash2,
-  Twitter,
+    CheckCircle,
+    Facebook,
+    Instagram,
+    Linkedin,
+    Loader2,
+    Radio,
+    Send,
+    Trash2,
+    Twitter,
 } from "lucide-react";
 import {
-  useEffect,
-  useMemo,
-  useState,
-  useTransition,
-  type ElementType,
-  type FormEvent,
+    useEffect,
+    useMemo,
+    useState,
+    useTransition,
+    type ElementType,
 } from "react";
 
 const NETWORKS: Array<{
@@ -44,7 +43,7 @@ const NETWORKS: Array<{
     label: "Instagram",
     color: "#E1306C",
     description:
-      "Publica imagem, vídeo ou carrossel via conta profissional conectada à Meta.",
+      "Publica imagem ou carrossel via conta profissional conectada à Meta.",
     oauth: "facebook",
     Icon: Instagram,
   },
@@ -60,24 +59,16 @@ const NETWORKS: Array<{
     id: "linkedin",
     label: "LinkedIn",
     color: "#0A66C2",
-    description: "Publica no perfil autenticado com escopo w_member_social.",
+    description: "Publica no perfil autenticado com escopo.",
     oauth: "linkedin",
     Icon: Linkedin,
-  },
-  {
-    id: "reddit",
-    label: "Reddit",
-    color: "#FF4500",
-    description: "Cria self-post ou link post em um subreddit via OAuth2.",
-    oauth: "reddit",
-    Icon: null,
   },
   {
     id: "x",
     label: "X",
     color: "#111111",
     description:
-      "Publica texto via OAuth oficial da API v2, sem copiar token manual.",
+      "Publica texto e foto.",
     oauth: "x",
     Icon: Twitter,
   },
@@ -98,18 +89,7 @@ function oauthGuide(network: SocialNetwork | undefined): {
           "Autorize o escopo de publicação (w_member_social).",
           "Você será redirecionado de volta com a conta conectada.",
         ],
-        note: "Se der erro, faça logout e login novamente. O administrador precisa configurar LINKEDIN_CLIENT_ID e LINKEDIN_CLIENT_SECRET no backend.",
-      };
-    case "reddit":
-      return {
-        title: "Passo a passo para conectar Reddit",
-        steps: [
-          "Certifique-se de estar logado no Postable.",
-          "Clique no botão abaixo para abrir o consentimento do Reddit.",
-          "Autorize os escopos de identidade e publicação.",
-          "Você será redirecionado de volta com a conta conectada.",
-        ],
-        note: "Se der erro, faça logout e login novamente. O administrador precisa configurar REDDIT_CLIENT_ID e REDDIT_CLIENT_SECRET no backend.",
+        note: "Se der erro, faça logout e login novamente.",
       };
     case "x":
       return {
@@ -120,7 +100,7 @@ function oauthGuide(network: SocialNetwork | undefined): {
           "Autorize o acesso à conta para publicar via API v2.",
           "Você será redirecionado de volta com a conta conectada.",
         ],
-        note: "Se der erro, faça logout e login novamente. O administrador precisa configurar X_CLIENT_ID (e opcionalmente X_CLIENT_SECRET) no backend.",
+        note: "Se der erro, faça logout e login novamente.",
       };
     case "facebook":
     case "instagram":
@@ -133,7 +113,7 @@ function oauthGuide(network: SocialNetwork | undefined): {
           "Autorize o acesso à sua conta e páginas.",
           "Você será redirecionado de volta com a conta conectada.",
         ],
-        note: "Se der erro, faça logout e login novamente. O administrador precisa configurar FACEBOOK_APP_ID e FACEBOOK_APP_SECRET no backend (veja SOCIAL_SETUP.md).",
+        note: "Se der erro, faça logout e login novamente.",
       };
   }
 }
@@ -174,11 +154,11 @@ export default function SocialPage() {
   const [isPending, startTransition] = useTransition();
   const [publishForm, setPublishForm] = useState({
     network: "instagram" as SocialNetwork,
+    deliveryMode: "now" as "now" | "schedule",
     connectionId: "",
     source: "manual" as "manual" | "generated",
     postId: "",
     title: "",
-    subreddit: "",
     text: "",
     link: "",
     mediaUrls: "",
@@ -254,8 +234,42 @@ export default function SocialPage() {
     }
   }
 
-  async function handlePublishSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handlePublishSubmit(deliveryMode: "now" | "schedule") {
+    if (publishForm.source === "manual" && !publishForm.text.trim()) {
+      setFeedback({
+        tone: "error",
+        text: "Digite um texto para publicar agora.",
+      });
+      return;
+    }
+    if (publishForm.source === "generated" && !publishForm.postId) {
+      setFeedback({
+        tone: "error",
+        text: "Selecione um post gerado para publicar.",
+      });
+      return;
+    }
+    if (
+      publishForm.network === "instagram" &&
+      publishForm.mediaUrls
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean).length === 0
+    ) {
+      setFeedback({
+        tone: "error",
+        text: "No Instagram, informe ao menos uma URL publica de midia.",
+      });
+      return;
+    }
+    if (deliveryMode === "schedule" && !publishForm.publishAt) {
+      setFeedback({
+        tone: "error",
+        text: "Escolha data e horario para agendar.",
+      });
+      return;
+    }
+
     try {
       const response = await publishSocialPost({
         network: publishForm.network,
@@ -265,7 +279,6 @@ export default function SocialPage() {
             ? publishForm.postId || undefined
             : undefined,
         title: publishForm.title || undefined,
-        subreddit: publishForm.subreddit || undefined,
         text:
           publishForm.source === "manual"
             ? publishForm.text || undefined
@@ -275,9 +288,10 @@ export default function SocialPage() {
           .split("\n")
           .map((item) => item.trim())
           .filter(Boolean),
-        publish_at: publishForm.publishAt
-          ? new Date(publishForm.publishAt).toISOString()
-          : undefined,
+        publish_at:
+          deliveryMode === "schedule" && publishForm.publishAt
+            ? new Date(publishForm.publishAt).toISOString()
+            : undefined,
       });
       setFeedback({
         tone: "success",
@@ -288,8 +302,8 @@ export default function SocialPage() {
       });
       setPublishForm((current) => ({
         ...current,
+        deliveryMode: "now",
         title: "",
-        subreddit: "",
         text: "",
         link: "",
         mediaUrls: "",
@@ -436,7 +450,8 @@ export default function SocialPage() {
             ) : null}
 
             <div className="space-y-2 pt-2">
-              {connections.filter((c) => c.network === activeNetwork).length === 0 ? (
+              {connections.filter((c) => c.network === activeNetwork).length ===
+              0 ? (
                 <p
                   className="text-sm"
                   style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
@@ -447,49 +462,58 @@ export default function SocialPage() {
                 connections
                   .filter((c) => c.network === activeNetwork)
                   .map((connection) => (
-                  <div
-                    key={connection.id}
-                    className="rounded-2xl px-4 py-3"
-                    style={{
-                      backgroundColor: "#f8f5ef",
-                      border: "1px solid #ece7de",
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p
-                          className="text-sm font-medium"
-                          style={{ fontFamily: "var(--font-body)" }}
-                        >
-                          {connection.account_name || connection.account_id}
-                        </p>
-                        <p
-                          className="text-xs mt-1"
-                          style={{
-                            color: "#8c8880",
-                            fontFamily: "var(--font-body)",
+                    <div
+                      key={connection.id}
+                      className="rounded-2xl px-4 py-3"
+                      style={{
+                        backgroundColor: "#f8f5ef",
+                        border: "1px solid #ece7de",
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p
+                            className="text-sm font-medium"
+                            style={{ fontFamily: "var(--font-body)" }}
+                          >
+                            {connection.account_name || connection.account_id}
+                          </p>
+                          <p
+                            className="text-xs mt-1"
+                            style={{
+                              color: "#8c8880",
+                              fontFamily: "var(--font-body)",
+                            }}
+                          >
+                            Expira em{" "}
+                            {formatDate(connection.token_expires_at ?? null)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await deleteSocialConnection(connection.id);
+                              setConnections((prev) =>
+                                prev.filter((c) => c.id !== connection.id),
+                              );
+                            } catch (err) {
+                              setFeedback({
+                                tone: "error",
+                                text:
+                                  err instanceof Error
+                                    ? err.message
+                                    : "Falha ao desconectar",
+                              });
+                            }
                           }}
+                          className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-red-100"
+                          title="Desconectar"
                         >
-                          Expira em {formatDate(connection.token_expires_at ?? null)}
-                        </p>
+                          <Trash2 size={14} style={{ color: "#dc2626" }} />
+                        </button>
                       </div>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await deleteSocialConnection(connection.id);
-                            setConnections((prev) => prev.filter((c) => c.id !== connection.id));
-                          } catch (err) {
-                            setFeedback({ tone: "error", text: err instanceof Error ? err.message : "Falha ao desconectar" });
-                          }
-                        }}
-                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-red-100"
-                        title="Desconectar"
-                      >
-                        <Trash2 size={14} style={{ color: "#dc2626" }} />
-                      </button>
                     </div>
-                  </div>
-                ))
+                  ))
               )}
             </div>
           </div>
@@ -517,7 +541,70 @@ export default function SocialPage() {
             {isPending && <Loader2 className="animate-spin" size={18} />}
           </div>
 
-          <form onSubmit={handlePublishSubmit} className="space-y-3">
+          <div
+            className="rounded-2xl p-3 mb-3"
+            style={{ backgroundColor: "#f8f5ef", border: "1px solid #e4e0d8" }}
+          >
+            <p
+              className="text-xs font-medium mb-2"
+              style={{ color: "#6b6258", fontFamily: "var(--font-body)" }}
+            >
+              Modo de envio
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setPublishForm((current) => ({
+                    ...current,
+                    deliveryMode: "now",
+                    publishAt: "",
+                  }))
+                }
+                className="rounded-xl px-3 py-2 text-xs font-medium"
+                style={{
+                  backgroundColor:
+                    publishForm.deliveryMode === "now" ? "#0a0a0a" : "#ece7de",
+                  color:
+                    publishForm.deliveryMode === "now" ? "#f8f5ef" : "#0a0a0a",
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                Publicar agora
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setPublishForm((current) => ({
+                    ...current,
+                    deliveryMode: "schedule",
+                  }))
+                }
+                className="rounded-xl px-3 py-2 text-xs font-medium"
+                style={{
+                  backgroundColor:
+                    publishForm.deliveryMode === "schedule"
+                      ? "#0a0a0a"
+                      : "#ece7de",
+                  color:
+                    publishForm.deliveryMode === "schedule"
+                      ? "#f8f5ef"
+                      : "#0a0a0a",
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                Agendar
+              </button>
+            </div>
+          </div>
+
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handlePublishSubmit("now");
+            }}
+            className="space-y-3"
+          >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <select
                 value={publishForm.network}
@@ -638,43 +725,6 @@ export default function SocialPage() {
               />
             )}
 
-            {publishForm.network === "reddit" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input
-                  value={publishForm.title}
-                  onChange={(event) =>
-                    setPublishForm((current) => ({
-                      ...current,
-                      title: event.target.value,
-                    }))
-                  }
-                  placeholder="Título do post no Reddit"
-                  className="rounded-2xl px-4 py-3 text-sm"
-                  style={{
-                    backgroundColor: "#f8f5ef",
-                    border: "1px solid #e4e0d8",
-                    fontFamily: "var(--font-body)",
-                  }}
-                />
-                <input
-                  value={publishForm.subreddit}
-                  onChange={(event) =>
-                    setPublishForm((current) => ({
-                      ...current,
-                      subreddit: event.target.value,
-                    }))
-                  }
-                  placeholder="Subreddit ex: brdev"
-                  className="rounded-2xl px-4 py-3 text-sm"
-                  style={{
-                    backgroundColor: "#f8f5ef",
-                    border: "1px solid #e4e0d8",
-                    fontFamily: "var(--font-body)",
-                  }}
-                />
-              </div>
-            )}
-
             <input
               value={publishForm.link}
               onChange={(event) =>
@@ -713,23 +763,37 @@ export default function SocialPage() {
               />
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-center">
-              <input
-                type="datetime-local"
-                value={publishForm.publishAt}
-                onChange={(event) =>
-                  setPublishForm((current) => ({
-                    ...current,
-                    publishAt: event.target.value,
-                  }))
-                }
-                className="rounded-2xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #e4e0d8",
-                  fontFamily: "var(--font-body)",
-                }}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 items-center">
+              {publishForm.deliveryMode === "schedule" ? (
+                <input
+                  type="datetime-local"
+                  value={publishForm.publishAt}
+                  onChange={(event) =>
+                    setPublishForm((current) => ({
+                      ...current,
+                      publishAt: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl px-4 py-3 text-sm"
+                  style={{
+                    backgroundColor: "#f8f5ef",
+                    border: "1px solid #e4e0d8",
+                    fontFamily: "var(--font-body)",
+                  }}
+                />
+              ) : (
+                <div
+                  className="rounded-2xl px-4 py-3 text-sm"
+                  style={{
+                    backgroundColor: "#f8f5ef",
+                    border: "1px dashed #d9d3ca",
+                    color: "#8c8880",
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  Envio imediato habilitado.
+                </div>
+              )}
               <button
                 type="submit"
                 className="rounded-2xl px-5 py-3 text-sm font-medium inline-flex items-center justify-center gap-2"
@@ -740,7 +804,22 @@ export default function SocialPage() {
                 }}
               >
                 <Send size={15} />
-                Publicar / Agendar
+                Publicar agora
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handlePublishSubmit("schedule");
+                }}
+                className="rounded-2xl px-5 py-3 text-sm font-medium inline-flex items-center justify-center gap-2"
+                style={{
+                  backgroundColor: "#ece7de",
+                  color: "#0a0a0a",
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                <Radio size={15} />
+                Agendar
               </button>
             </div>
           </form>

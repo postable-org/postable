@@ -46,7 +46,6 @@ var allowedPlatforms = map[string]bool{
 	"linkedin":  true,
 	"facebook":  true,
 	"x":         true,
-	"reddit":    true,
 }
 
 // GenerateHandler handles GET /api/generate SSE requests.

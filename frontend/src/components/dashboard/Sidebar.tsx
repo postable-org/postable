@@ -1,21 +1,21 @@
 "use client";
 
+import { createPortalSession, getSubscription } from "@/lib/api/subscription";
+import { useQuery } from "@tanstack/react-query";
 import {
+  BarChart2,
   Brain,
   Facebook,
   FileText,
   Instagram,
+  Kanban,
   LayoutDashboard,
   Linkedin,
   Megaphone,
   Settings,
   Share2,
   Twitter,
-  Kanban,
-  BarChart2,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { getSubscription, createPortalSession } from "@/lib/api/subscription";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -55,13 +55,6 @@ const PLATFORMS = [
     label: "X",
     Icon: Twitter,
     color: "#FFFFFF",
-  },
-  {
-    id: "reddit",
-    label: "Reddit",
-    // Reddit icon not in Lucide — use a styled badge
-    Icon: null,
-    color: "#FF4500",
   },
 ];
 
@@ -212,17 +205,7 @@ export function Sidebar({
                       color: isSelected ? color : "rgba(248,245,239,0.35)",
                     }}
                   />
-                ) : (
-                  /* Reddit custom icon */
-                  <span
-                    className="text-[11px] font-bold w-3.5 text-center leading-none"
-                    style={{
-                      color: isSelected ? color : "rgba(248,245,239,0.35)",
-                    }}
-                  >
-                    Rd
-                  </span>
-                )}
+                ) : null}
                 <span className="text-xs">{label}</span>
                 {isSelected && (
                   <div
@@ -260,7 +243,12 @@ export function Sidebar({
               border: "1px solid rgba(166,200,249,0.15)",
             }}
           >
-            <span style={{ color: "rgba(248,245,239,0.5)", fontFamily: "var(--font-body)" }}>
+            <span
+              style={{
+                color: "rgba(248,245,239,0.5)",
+                fontFamily: "var(--font-body)",
+              }}
+            >
               Plano
             </span>
             <span
@@ -294,8 +282,12 @@ export function Sidebar({
           href="/settings"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm w-full"
           style={{
-            backgroundColor: pathname === "/settings" ? "rgba(248,245,239,0.09)" : "transparent",
-            color: pathname === "/settings" ? "#f8f5ef" : "rgba(248,245,239,0.4)",
+            backgroundColor:
+              pathname === "/settings"
+                ? "rgba(248,245,239,0.09)"
+                : "transparent",
+            color:
+              pathname === "/settings" ? "#f8f5ef" : "rgba(248,245,239,0.4)",
             fontFamily: "var(--font-body)",
             fontWeight: pathname === "/settings" ? 500 : 400,
           }}
@@ -303,7 +295,10 @@ export function Sidebar({
           <Settings
             size={15}
             strokeWidth={pathname === "/settings" ? 2 : 1.8}
-            style={{ color: pathname === "/settings" ? "#f8f5ef" : "rgba(248,245,239,0.3)" }}
+            style={{
+              color:
+                pathname === "/settings" ? "#f8f5ef" : "rgba(248,245,239,0.3)",
+            }}
           />
           Configurações
         </Link>

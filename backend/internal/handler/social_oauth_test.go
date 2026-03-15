@@ -3,7 +3,7 @@ package handler_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/jwtauth/v5"
 
 	"postable/internal/handler"
+	"postable/internal/service"
 )
 
 type mockSocialOAuthService struct {
@@ -180,7 +181,7 @@ func TestSocialOAuthCallback_UsesServiceRedirect(t *testing.T) {
 func TestSocialOAuthStart_NotConfiguredReturns501(t *testing.T) {
 	router := buildSocialOAuthRouter(&mockSocialOAuthService{
 		startFn: func(ctx context.Context, userID, network string) (string, error) {
-			return "", errors.New("oauth is not configured for this network")
+			return "", fmt.Errorf("linkedin oauth is not configured; set LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET: %w", service.ErrOAuthNotConfigured)
 		},
 	})
 	token := makeTestJWT(t, "user-abc")
@@ -189,7 +190,7 @@ func TestSocialOAuthStart_NotConfiguredReturns501(t *testing.T) {
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 with generic error, got %d", rr.Code)
+	if rr.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501 for wrapped oauth-not-configured error, got %d", rr.Code)
 	}
 }

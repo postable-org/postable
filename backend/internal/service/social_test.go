@@ -56,11 +56,14 @@ func jsonResponse(status int, body string) *http.Response {
 }
 
 func TestIsValidSocialNetwork_ExpandedSet(t *testing.T) {
-	valid := []string{SocialNetworkLinkedIn, SocialNetworkFacebook, SocialNetworkInstagram, SocialNetworkReddit, SocialNetworkX}
+	valid := []string{SocialNetworkLinkedIn, SocialNetworkFacebook, SocialNetworkInstagram, SocialNetworkX}
 	for _, network := range valid {
 		if !IsValidSocialNetwork(network) {
 			t.Fatalf("expected %q to be valid", network)
 		}
+	}
+	if IsValidSocialNetwork(SocialNetworkReddit) {
+		t.Fatalf("expected %q to be invalid", SocialNetworkReddit)
 	}
 	if IsValidSocialNetwork("threads") {
 		t.Fatalf("expected unsupported network to be invalid")

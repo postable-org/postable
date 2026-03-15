@@ -34,7 +34,7 @@ const (
 
 var (
 	ErrSocialUnavailable     = errors.New("social publishing requires database")
-	ErrInvalidNetwork        = errors.New("invalid network: must be linkedin, facebook, instagram, reddit, or x")
+	ErrInvalidNetwork        = errors.New("invalid network: must be linkedin, facebook, instagram, or x")
 	ErrConnectionNotFound    = errors.New("social connection not found")
 	ErrPublishPayloadInvalid = errors.New("publish payload must include text")
 	ErrPostTextNotFound      = errors.New("post content text not found")
@@ -126,7 +126,6 @@ func NewSocialService(db *pgxpool.Pool, publishers map[string]SocialPublisher) *
 			SocialNetworkLinkedIn:  NewLinkedInPublisher(defaultClient),
 			SocialNetworkFacebook:  NewFacebookPublisher(defaultClient),
 			SocialNetworkInstagram: NewInstagramPublisher(defaultClient),
-			SocialNetworkReddit:    NewRedditPublisher(defaultClient),
 			SocialNetworkX:         NewXPublisher(defaultClient),
 		}
 	}
@@ -135,7 +134,7 @@ func NewSocialService(db *pgxpool.Pool, publishers map[string]SocialPublisher) *
 
 func IsValidSocialNetwork(network string) bool {
 	switch strings.ToLower(strings.TrimSpace(network)) {
-	case SocialNetworkLinkedIn, SocialNetworkFacebook, SocialNetworkInstagram, SocialNetworkReddit, SocialNetworkX:
+	case SocialNetworkLinkedIn, SocialNetworkFacebook, SocialNetworkInstagram, SocialNetworkX:
 		return true
 	default:
 		return false
@@ -335,6 +334,11 @@ func (s *SocialService) ProcessDueJobs(ctx context.Context, now time.Time, limit
 		limit = 20
 	}
 
+	// Recover jobs that were marked as processing but never finished (e.g., crash/restart).
+	if err := s.requeueStaleProcessingJobs(ctx, now.UTC(), 2*time.Minute); err != nil {
+		return 0, err
+	}
+
 	processed := 0
 	for processed < limit {
 		job, conn, err := s.claimNextDueJob(ctx, now.UTC())
@@ -351,6 +355,25 @@ func (s *SocialService) ProcessDueJobs(ctx context.Context, now time.Time, limit
 	}
 
 	return processed, nil
+}
+
+func (s *SocialService) requeueStaleProcessingJobs(ctx context.Context, now time.Time, staleAfter time.Duration) error {
+	if staleAfter <= 0 {
+		staleAfter = 2 * time.Minute
+	}
+	staleBefore := now.Add(-staleAfter)
+	tag, err := s.db.Exec(ctx, `
+		UPDATE social_post_jobs
+		SET status = $1, updated_at = now()
+		WHERE status = $2 AND updated_at < $3
+	`, SocialJobQueued, SocialJobProcessing, staleBefore)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() > 0 {
+		slog.Warn("social scheduler: requeued stale processing jobs", "count", tag.RowsAffected())
+	}
+	return nil
 }
 
 func (s *SocialService) resolveConnection(ctx context.Context, userID, connectionID, network string) (*SocialConnection, error) {
@@ -893,18 +916,35 @@ func (p *InstagramPublisher) Publish(ctx context.Context, conn SocialConnection,
 
 	publishBody := map[string]string{"creation_id": creationID}
 	url := fmt.Sprintf("https://graph.facebook.com/v25.0/%s/media_publish", conn.AccountID)
-	raw, status, _, err := doJSONRequest(ctx, p.client, http.MethodPost, url, conn.AccessToken, publishBody, nil)
-	if err != nil {
-		return nil, err
-	}
-	if status < 200 || status >= 300 {
+	const maxAttempts = 5
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		raw, status, _, err := doJSONRequest(ctx, p.client, http.MethodPost, url, conn.AccessToken, publishBody, nil)
+		if err != nil {
+			return nil, err
+		}
+		if status >= 200 && status < 300 {
+			var parsed struct {
+				ID string `json:"id"`
+			}
+			_ = json.Unmarshal(raw, &parsed)
+			return &PublishResult{ProviderPostID: parsed.ID, RawResponse: raw}, nil
+		}
+
+		if isMetaOAuthInvalidToken(raw) {
+			return nil, errors.New("instagram access token invalid or expired; reconnect your Facebook/Instagram account")
+		}
+
+		if attempt < maxAttempts && isInstagramMediaNotReady(raw) {
+			if err := sleepWithContext(ctx, 2*time.Second); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
 		return nil, fmt.Errorf("instagram publish failed: status=%d body=%s", status, string(raw))
 	}
-	var parsed struct {
-		ID string `json:"id"`
-	}
-	_ = json.Unmarshal(raw, &parsed)
-	return &PublishResult{ProviderPostID: parsed.ID, RawResponse: raw}, nil
+
+	return nil, errors.New("instagram publish failed after retries")
 }
 
 func (p *InstagramPublisher) createMediaContainer(ctx context.Context, conn SocialConnection, payload SocialPublishPayload) (string, error) {
@@ -965,6 +1005,9 @@ func (p *InstagramPublisher) createSingleInstagramContainer(ctx context.Context,
 		return "", err
 	}
 	if status < 200 || status >= 300 {
+		if isInstagramInvalidMediaURL(raw) {
+			return "", errors.New("instagram media URL is invalid or unreachable; use a direct public image/video URL (https) that does not require login")
+		}
 		return "", fmt.Errorf("instagram media container failed: status=%d body=%s", status, string(raw))
 	}
 	var parsed struct {
@@ -990,6 +1033,64 @@ func looksLikeVideoURL(rawURL string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func isInstagramMediaNotReady(raw []byte) bool {
+	_, subcode, message, ok := parseMetaError(raw)
+	if ok && subcode == 2207027 {
+		return true
+	}
+	return strings.Contains(strings.ToLower(message), "media id is not available")
+}
+
+func isMetaOAuthInvalidToken(raw []byte) bool {
+	code, _, message, ok := parseMetaError(raw)
+	if ok && code == 190 {
+		return true
+	}
+	return strings.Contains(strings.ToLower(message), "invalid oauth access token")
+}
+
+func isInstagramInvalidMediaURL(raw []byte) bool {
+	code, subcode, message, ok := parseMetaError(raw)
+	if ok && code == 9004 {
+		return true
+	}
+	if ok && subcode == 2207052 {
+		return true
+	}
+	msg := strings.ToLower(message)
+	return strings.Contains(msg, "only photo or video can be accepted") ||
+		strings.Contains(msg, "url da midia") ||
+		strings.Contains(msg, "media url")
+}
+
+func parseMetaError(raw []byte) (code int, subcode int, message string, ok bool) {
+	var body struct {
+		Error struct {
+			Message      string `json:"message"`
+			Code         int    `json:"code"`
+			ErrorSubcode int    `json:"error_subcode"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return 0, 0, "", false
+	}
+	if body.Error.Code == 0 && body.Error.Message == "" {
+		return 0, 0, "", false
+	}
+	return body.Error.Code, body.Error.ErrorSubcode, body.Error.Message, true
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
 	}
 }
 

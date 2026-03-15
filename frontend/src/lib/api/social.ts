@@ -1,11 +1,6 @@
 import { apiFetch } from "@/lib/api-client";
 
-export type SocialNetwork =
-  | "linkedin"
-  | "facebook"
-  | "instagram"
-  | "reddit"
-  | "x";
+export type SocialNetwork = "linkedin" | "facebook" | "instagram" | "x";
 
 export interface SocialConnection {
   id: string;
@@ -32,7 +27,6 @@ export interface SocialJob {
   error_message?: string | null;
   payload: {
     title?: string;
-    subreddit?: string;
     text: string;
     link?: string;
     media_urls?: string[];
@@ -47,7 +41,6 @@ export interface PublishPayload {
   connection_id?: string;
   post_id?: string;
   title?: string;
-  subreddit?: string;
   text?: string;
   link?: string;
   media_urls?: string[];
@@ -118,7 +111,9 @@ export async function startSocialOAuth(
 }
 
 export async function deleteSocialConnection(id: string): Promise<void> {
-  const res = await apiFetch(`/api/social/connections/${id}`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/social/connections/${id}`, {
+    method: "DELETE",
+  });
   if (res.status === 204) return;
   await ensureOk(res);
 }

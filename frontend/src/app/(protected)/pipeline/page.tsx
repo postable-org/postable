@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { getPosts, updatePostStatus } from "@/lib/api/posts";
 import type { Post } from "@/lib/api/posts";
+import { getPosts, updatePostStatus } from "@/lib/api/posts";
 import {
+  CheckCircle2,
+  Clock,
+  Facebook,
+  GripVertical,
   Instagram,
   Linkedin,
-  Facebook,
-  Twitter,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Sparkles,
-  Send,
-  GripVertical,
   Plus,
+  Send,
+  Sparkles,
+  Twitter,
+  XCircle,
 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 type ColumnId = "draft" | "pending" | "approved" | "published" | "rejected";
 
@@ -74,7 +74,6 @@ const PLATFORMS = [
   { id: "linkedin", label: "LinkedIn", Icon: Linkedin, color: "#0A66C2" },
   { id: "facebook", label: "Facebook", Icon: Facebook, color: "#1877F2" },
   { id: "x", label: "X", Icon: Twitter, color: "#000000" },
-  { id: "reddit", label: "Reddit", Icon: null, color: "#FF4500" },
 ];
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -109,7 +108,8 @@ function PipelineCard({
   isDragging: boolean;
 }) {
   const plat = getPlatformEntry(post.platform);
-  const formatLabel = FORMAT_LABEL[post.content_json.suggested_format] ?? "Post";
+  const formatLabel =
+    FORMAT_LABEL[post.content_json.suggested_format] ?? "Post";
 
   return (
     <div
@@ -198,7 +198,11 @@ function PipelineCard({
         >
           {formatRelativeDate(post.created_at)}
         </span>
-        <GripVertical size={13} strokeWidth={1.5} style={{ color: "#d0cdc7" }} />
+        <GripVertical
+          size={13}
+          strokeWidth={1.5}
+          style={{ color: "#d0cdc7" }}
+        />
       </div>
     </div>
   );
@@ -232,7 +236,9 @@ function BoardColumn({
       style={{
         width: 280,
         backgroundColor: isOver ? colDef.bgLight : "#f8f5ef",
-        border: isOver ? `2px solid ${colDef.color}40` : "2px solid transparent",
+        border: isOver
+          ? `2px solid ${colDef.color}40`
+          : "2px solid transparent",
         transition: "background-color 0.15s, border-color 0.15s",
       }}
       onDragOver={(e) => onDragOver(e, colDef.id)}
@@ -310,11 +316,13 @@ function BoardColumn({
           className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs transition-all"
           style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = `${colDef.color}10`;
+            (e.currentTarget as HTMLElement).style.backgroundColor =
+              `${colDef.color}10`;
             (e.currentTarget as HTMLElement).style.color = colDef.color;
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+            (e.currentTarget as HTMLElement).style.backgroundColor =
+              "transparent";
             (e.currentTarget as HTMLElement).style.color = "#8c8880";
           }}
         >
@@ -365,7 +373,7 @@ export default function PipelinePage() {
       setDragging({ id, fromColumn });
       e.dataTransfer.effectAllowed = "move";
     },
-    []
+    [],
   );
 
   const handleDragOver = useCallback(
@@ -374,7 +382,7 @@ export default function PipelinePage() {
       e.dataTransfer.dropEffect = "move";
       setDragOver(columnId);
     },
-    []
+    [],
   );
 
   const handleDragLeave = useCallback(() => {
@@ -418,7 +426,7 @@ export default function PipelinePage() {
         }
       }
     },
-    [dragging]
+    [dragging],
   );
 
   const filteredBoard: BoardState =
@@ -428,7 +436,9 @@ export default function PipelinePage() {
           draft: board.draft.filter((p) => p.platform === activePlatform),
           pending: board.pending.filter((p) => p.platform === activePlatform),
           approved: board.approved.filter((p) => p.platform === activePlatform),
-          published: board.published.filter((p) => p.platform === activePlatform),
+          published: board.published.filter(
+            (p) => p.platform === activePlatform,
+          ),
           rejected: board.rejected.filter((p) => p.platform === activePlatform),
         };
 
@@ -485,13 +495,6 @@ export default function PipelinePage() {
                     strokeWidth={1.8}
                     style={{ color: active ? color : "#8c8880" }}
                   />
-                ) : id === "reddit" ? (
-                  <span
-                    className="text-[10px] font-bold"
-                    style={{ color: active ? color : "#8c8880" }}
-                  >
-                    Rd
-                  </span>
                 ) : null}
                 {label}
               </button>

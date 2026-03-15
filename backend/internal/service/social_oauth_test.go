@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
@@ -98,5 +99,23 @@ func TestSocialOAuthService_StartAuthorizationXIncludesPKCE(t *testing.T) {
 	}
 	if payload.CodeVerifier == "" {
 		t.Fatalf("expected state payload to include PKCE code verifier")
+	}
+}
+
+func TestSocialOAuthService_StartAuthorizationLinkedInMissingConfigReturnsHelpfulError(t *testing.T) {
+	svc := &SocialOAuthService{
+		stateSecret: []byte("super-secret"),
+		apiBaseURL:  "http://localhost:8080",
+	}
+
+	_, err := svc.StartAuthorization(context.Background(), "user-123", SocialNetworkLinkedIn)
+	if err == nil {
+		t.Fatal("expected missing config error")
+	}
+	if !strings.Contains(err.Error(), "LINKEDIN_CLIENT_ID") {
+		t.Fatalf("expected helpful linkedin error, got %v", err)
+	}
+	if !errors.Is(err, ErrOAuthNotConfigured) {
+		t.Fatalf("expected ErrOAuthNotConfigured, got %v", err)
 	}
 }
