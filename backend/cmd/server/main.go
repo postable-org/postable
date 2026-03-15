@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -83,7 +84,16 @@ func main() {
 	// Initialize DB pool if DATABASE_URL is set
 	var dbPool *pgxpool.Pool
 	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
-		pool, err := pgxpool.New(context.Background(), databaseURL)
+		cfg, err := pgxpool.ParseConfig(databaseURL)
+		if err != nil {
+			slog.Error("failed to parse database URL", "error", err)
+			os.Exit(1)
+		}
+		// Force IPv4 — Railway free plan has no IPv6 outbound routing
+		cfg.ConnConfig.DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "tcp4", addr)
+		}
+		pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
 		if err != nil {
 			slog.Error("failed to connect to database", "error", err)
 			os.Exit(1)
