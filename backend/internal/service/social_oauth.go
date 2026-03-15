@@ -115,6 +115,8 @@ func (s *SocialOAuthService) StartAuthorization(ctx context.Context, userID, net
 			"pages_manage_posts",
 			"instagram_basic",
 			"instagram_content_publish",
+			"instagram_manage_insights",
+			"read_insights",
 			"business_management",
 		}, ","))
 		return "https://www.facebook.com/v25.0/dialog/oauth?" + query.Encode(), nil
