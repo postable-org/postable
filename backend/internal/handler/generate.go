@@ -90,6 +90,7 @@ type frontendGenerateRequest struct {
 	CompetitorHandles []string                `json:"competitor_handles"`
 	PostHistory       []string                `json:"post_history"`
 	CampaignBrief     frontendCampaignBrief   `json:"campaign_brief"`
+	Platform          string                  `json:"platform"`
 }
 
 // GenerateHandler handles POST /api/generate SSE requests.
@@ -128,7 +129,10 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	platform := "instagram"
+	platform := req.Platform
+	if !allowedPlatforms[platform] {
+		platform = "instagram"
+	}
 
 	// Quota check
 	if h.subSvc != nil {
@@ -253,32 +257,70 @@ func processAgentImage(ctx context.Context, responseJSON []byte, storageSvc Stor
 		return responseJSON, "", nil
 	}
 
-	imageBase64Raw, hasBase64 := payload["image_base64"]
-	if !hasBase64 || len(imageBase64Raw) == 0 || string(imageBase64Raw) == "null" {
-		return responseJSON, "", nil
-	}
-
-	var imageBase64 string
-	if err := json.Unmarshal(imageBase64Raw, &imageBase64); err != nil || imageBase64 == "" {
-		return responseJSON, "", nil
-	}
-
+	var imageBytes []byte
 	mimeType := "image/jpeg"
-	if mimeRaw, ok := payload["image_mime_type"]; ok {
-		var mt string
-		if err := json.Unmarshal(mimeRaw, &mt); err == nil && mt != "" {
-			mimeType = mt
+
+	imageBase64Raw, hasBase64 := payload["image_base64"]
+	if hasBase64 && len(imageBase64Raw) > 0 && string(imageBase64Raw) != "null" {
+		var imageBase64 string
+		if err := json.Unmarshal(imageBase64Raw, &imageBase64); err != nil || imageBase64 == "" {
+			return responseJSON, "", nil
 		}
-	}
-
-	// Strip whitespace/newlines — some encoders (e.g. Python's base64 module) wrap at 76 chars.
-	imageBase64 = strings.ReplaceAll(imageBase64, "\n", "")
-	imageBase64 = strings.ReplaceAll(imageBase64, "\r", "")
-	imageBase64 = strings.ReplaceAll(imageBase64, " ", "")
-
-	imageBytes, err := base64.StdEncoding.DecodeString(imageBase64)
-	if err != nil {
-		return responseJSON, "", fmt.Errorf("decode image_base64: %w", err)
+		if mimeRaw, ok := payload["image_mime_type"]; ok {
+			var mt string
+			if err := json.Unmarshal(mimeRaw, &mt); err == nil && mt != "" {
+				mimeType = mt
+			}
+		}
+		// Strip whitespace/newlines — some encoders (e.g. Python's base64 module) wrap at 76 chars.
+		imageBase64 = strings.ReplaceAll(imageBase64, "\n", "")
+		imageBase64 = strings.ReplaceAll(imageBase64, "\r", "")
+		imageBase64 = strings.ReplaceAll(imageBase64, " ", "")
+		decoded, err := base64.StdEncoding.DecodeString(imageBase64)
+		if err != nil {
+			decoded, err = base64.RawStdEncoding.DecodeString(imageBase64)
+			if err != nil {
+				return responseJSON, "", fmt.Errorf("decode image_base64: %w", err)
+			}
+		}
+		imageBytes = decoded
+	} else {
+		// Check if image_url is a data URL (data:{mime};base64,{b64})
+		imageURLRaw, hasURL := payload["image_url"]
+		if !hasURL || len(imageURLRaw) == 0 || string(imageURLRaw) == "null" {
+			return responseJSON, "", nil
+		}
+		var imageURL string
+		if err := json.Unmarshal(imageURLRaw, &imageURL); err != nil || imageURL == "" {
+			return responseJSON, "", nil
+		}
+		if !strings.HasPrefix(imageURL, "data:") {
+			return responseJSON, "", nil
+		}
+		// Parse: data:{mimeType};base64,{b64data}
+		rest := strings.TrimPrefix(imageURL, "data:")
+		semicolonIdx := strings.Index(rest, ";")
+		if semicolonIdx < 0 {
+			return responseJSON, "", fmt.Errorf("invalid data URL: missing semicolon")
+		}
+		mimeType = rest[:semicolonIdx]
+		rest = rest[semicolonIdx+1:]
+		commaIdx := strings.Index(rest, ",")
+		if commaIdx < 0 {
+			return responseJSON, "", fmt.Errorf("invalid data URL: missing comma")
+		}
+		b64 := rest[commaIdx+1:]
+		b64 = strings.ReplaceAll(b64, "\n", "")
+		b64 = strings.ReplaceAll(b64, "\r", "")
+		b64 = strings.ReplaceAll(b64, " ", "")
+		decoded, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			decoded, err = base64.RawStdEncoding.DecodeString(b64)
+			if err != nil {
+				return responseJSON, "", fmt.Errorf("decode data URL base64: %w", err)
+			}
+		}
+		imageBytes = decoded
 	}
 
 	imageURL, err := storageSvc.UploadImage(ctx, userID, imageBytes, mimeType)

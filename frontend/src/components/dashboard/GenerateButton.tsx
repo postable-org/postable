@@ -27,6 +27,7 @@ const EMPTY_PAYLOAD: GenerateRequest = {
   competitor_handles: [],
   post_history: [],
   campaign_brief: { goal: "", target_audience: "", cta_channel: "", theme_hint: null },
+  platform: "instagram",
 };
 
 export function GenerateButton({
@@ -36,7 +37,7 @@ export function GenerateButton({
   resetRef,
   dark,
 }: GenerateButtonProps) {
-  const { platform: _platform } = usePlatform();
+  const { platform } = usePlatform();
   const { status, stageState, progressMessage, error, start, reset } = useSSEGenerate(onGenerated);
 
   const handleStart = async () => {
@@ -65,6 +66,7 @@ export function GenerateButton({
           cta_channel: brand?.cta_channel ?? "",
           theme_hint: null,
         },
+        platform,
       };
       start(payload);
     } catch {
@@ -76,7 +78,7 @@ export function GenerateButton({
     if (triggerRef) {
       triggerRef.current = handleStart;
     }
-  }, [start, triggerRef, _platform]);
+  }, [start, triggerRef, platform]);
 
   // Expose reset
   useEffect(() => {

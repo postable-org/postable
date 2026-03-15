@@ -40,6 +40,7 @@ export interface GenerateRequest {
   competitor_handles: string[];
   post_history: string[];
   campaign_brief: CampaignBrief;
+  platform: string;
 }
 
 export interface UseSSEGenerateResult {
