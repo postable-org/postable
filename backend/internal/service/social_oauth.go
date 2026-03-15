@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -30,9 +31,10 @@ type SocialOAuthService struct {
 }
 
 type oauthStatePayload struct {
-	UserID    string `json:"user_id"`
-	Network   string `json:"network"`
-	ExpiresAt int64  `json:"expires_at"`
+	UserID       string `json:"user_id"`
+	Network      string `json:"network"`
+	CodeVerifier string `json:"code_verifier,omitempty"`
+	ExpiresAt    int64  `json:"expires_at"`
 }
 
 type oauthTokenResponse struct {
@@ -67,7 +69,15 @@ func NewSocialOAuthService(social *SocialService) *SocialOAuthService {
 
 func (s *SocialOAuthService) StartAuthorization(ctx context.Context, userID, network string) (string, error) {
 	network = normalizeSocialNetwork(network)
-	state, err := s.signState(userID, network)
+	codeVerifier := ""
+	if network == SocialNetworkX {
+		var err error
+		codeVerifier, err = generatePKCEVerifier()
+		if err != nil {
+			return "", err
+		}
+	}
+	state, err := s.signStateWithVerifier(userID, network, codeVerifier)
 	if err != nil {
 		return "", err
 	}
@@ -117,6 +127,20 @@ func (s *SocialOAuthService) StartAuthorization(ctx context.Context, userID, net
 			"business_management",
 		}, ","))
 		return "https://www.facebook.com/v25.0/dialog/oauth?" + query.Encode(), nil
+	case SocialNetworkX:
+		clientID := strings.TrimSpace(os.Getenv("X_CLIENT_ID"))
+		if clientID == "" {
+			return "", ErrOAuthNotConfigured
+		}
+		query := url.Values{}
+		query.Set("response_type", "code")
+		query.Set("client_id", clientID)
+		query.Set("redirect_uri", s.callbackURL(network))
+		query.Set("scope", "tweet.read tweet.write users.read offline.access")
+		query.Set("state", state)
+		query.Set("code_challenge", pkceS256Challenge(codeVerifier))
+		query.Set("code_challenge_method", "S256")
+		return "https://x.com/i/oauth2/authorize?" + query.Encode(), nil
 	default:
 		return "", ErrInvalidNetwork
 	}
@@ -149,9 +173,100 @@ func (s *SocialOAuthService) HandleCallback(ctx context.Context, network, code, 
 		}
 		message := fmt.Sprintf("Meta conectado: %d conta(s)", connected)
 		return s.successRedirect(SocialNetworkFacebook, message), nil
+	case SocialNetworkX:
+		if err := s.completeXOAuth(ctx, payload.UserID, code, payload.CodeVerifier); err != nil {
+			return s.errorRedirect(network, err.Error()), err
+		}
+		return s.successRedirect(network, "X conectado com sucesso"), nil
 	default:
 		return s.errorRedirect(network, ErrInvalidNetwork.Error()), ErrInvalidNetwork
 	}
+}
+
+func (s *SocialOAuthService) completeXOAuth(ctx context.Context, userID, code, codeVerifier string) error {
+	clientID := strings.TrimSpace(os.Getenv("X_CLIENT_ID"))
+	if clientID == "" {
+		return ErrOAuthNotConfigured
+	}
+	if strings.TrimSpace(codeVerifier) == "" {
+		return ErrOAuthStateInvalid
+	}
+
+	extraHeaders := map[string]string{}
+	if clientSecret := strings.TrimSpace(os.Getenv("X_CLIENT_SECRET")); clientSecret != "" {
+		extraHeaders["Authorization"] = basicAuthValue(clientID, clientSecret)
+	}
+
+	form := url.Values{
+		"grant_type":    []string{"authorization_code"},
+		"code":          []string{code},
+		"redirect_uri":  []string{s.callbackURL(SocialNetworkX)},
+		"client_id":     []string{clientID},
+		"code_verifier": []string{codeVerifier},
+	}
+	token, err := s.exchangeFormToken(ctx, "https://api.x.com/2/oauth2/token", form, extraHeaders)
+	if err != nil {
+		// Backward compatibility for environments that still use the legacy Twitter domain.
+		token, err = s.exchangeFormToken(ctx, "https://api.twitter.com/2/oauth2/token", form, extraHeaders)
+		if err != nil {
+			return err
+		}
+	}
+
+	profileURL := "https://api.x.com/2/users/me?user.fields=username,name"
+	raw, status, _, err := doJSONRequest(ctx, s.httpClient, http.MethodGet, profileURL, token.AccessToken, nil, nil)
+	if err != nil {
+		return err
+	}
+	if status < 200 || status >= 300 {
+		fallbackURL := "https://api.twitter.com/2/users/me?user.fields=username,name"
+		raw, status, _, err = doJSONRequest(ctx, s.httpClient, http.MethodGet, fallbackURL, token.AccessToken, nil, nil)
+		if err != nil {
+			return err
+		}
+		if status < 200 || status >= 300 {
+			return fmt.Errorf("x user profile fetch failed: status=%d body=%s", status, string(raw))
+		}
+	}
+
+	var profile struct {
+		Data struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Username string `json:"username"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &profile); err != nil {
+		return err
+	}
+	if strings.TrimSpace(profile.Data.ID) == "" {
+		return errors.New("x profile response did not include user id")
+	}
+
+	accountName := strings.TrimSpace(profile.Data.Username)
+	if accountName != "" {
+		accountName = "@" + accountName
+	} else if strings.TrimSpace(profile.Data.Name) != "" {
+		accountName = profile.Data.Name
+	} else {
+		accountName = profile.Data.ID
+	}
+
+	expiresAt := expiresAtPtr(token.ExpiresIn)
+	metadata, _ := json.Marshal(map[string]string{
+		"provider": "x",
+		"scope":    token.Scope,
+	})
+	_, err = s.social.UpsertConnection(ctx, userID, SocialConnectionInput{
+		Network:        SocialNetworkX,
+		AccountID:      profile.Data.ID,
+		AccountName:    accountName,
+		AccessToken:    token.AccessToken,
+		RefreshToken:   token.RefreshToken,
+		TokenExpiresAt: expiresAt,
+		MetadataJSON:   metadata,
+	})
+	return err
 }
 
 func (s *SocialOAuthService) completeLinkedInOAuth(ctx context.Context, userID, code string) error {
@@ -375,13 +490,18 @@ func (s *SocialOAuthService) exchangeFormToken(ctx context.Context, endpoint str
 }
 
 func (s *SocialOAuthService) signState(userID, network string) (string, error) {
+	return s.signStateWithVerifier(userID, network, "")
+}
+
+func (s *SocialOAuthService) signStateWithVerifier(userID, network, codeVerifier string) (string, error) {
 	if len(s.stateSecret) == 0 {
 		return "", ErrOAuthNotConfigured
 	}
 	payload := oauthStatePayload{
-		UserID:    userID,
-		Network:   normalizeSocialNetwork(network),
-		ExpiresAt: time.Now().Add(10 * time.Minute).Unix(),
+		UserID:       userID,
+		Network:      normalizeSocialNetwork(network),
+		CodeVerifier: codeVerifier,
+		ExpiresAt:    time.Now().Add(10 * time.Minute).Unix(),
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
@@ -484,4 +604,17 @@ func oauthBoolEnv(key string) bool {
 	}
 	parsed, _ := strconv.ParseBool(v)
 	return parsed
+}
+
+func generatePKCEVerifier() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func pkceS256Challenge(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }

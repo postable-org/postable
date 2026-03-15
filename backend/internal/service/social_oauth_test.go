@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +36,7 @@ func TestSocialOAuthService_VerifyStateRejectsTamperedState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("signState failed: %v", err)
 	}
-	tampered := state[:len(state)-1] + "x"
+	tampered := "x" + state[1:]
 
 	if _, err := svc.verifyState(tampered); err != ErrOAuthStateInvalid {
 		t.Fatalf("expected ErrOAuthStateInvalid, got %v", err)
@@ -58,5 +60,43 @@ func TestSocialOAuthService_FrontendRedirectUsesSocialPage(t *testing.T) {
 		if !strings.Contains(redirect, expected) {
 			t.Fatalf("expected %q in redirect, got %q", expected, redirect)
 		}
+	}
+}
+
+func TestSocialOAuthService_StartAuthorizationXIncludesPKCE(t *testing.T) {
+	t.Setenv("X_CLIENT_ID", "x-client-id")
+	svc := &SocialOAuthService{
+		stateSecret: []byte("super-secret"),
+		apiBaseURL:  "http://localhost:8080",
+	}
+
+	authURL, err := svc.StartAuthorization(context.Background(), "user-123", SocialNetworkX)
+	if err != nil {
+		t.Fatalf("StartAuthorization failed: %v", err)
+	}
+	parsed, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatalf("invalid auth URL: %v", err)
+	}
+	if parsed.Host != "x.com" {
+		t.Fatalf("expected x.com host, got %q", parsed.Host)
+	}
+	q := parsed.Query()
+	if q.Get("code_challenge_method") != "S256" {
+		t.Fatalf("expected code_challenge_method=S256, got %q", q.Get("code_challenge_method"))
+	}
+	if q.Get("code_challenge") == "" {
+		t.Fatalf("expected code_challenge in auth URL")
+	}
+
+	payload, err := svc.verifyState(q.Get("state"))
+	if err != nil {
+		t.Fatalf("verifyState failed: %v", err)
+	}
+	if payload.Network != SocialNetworkX {
+		t.Fatalf("expected network x, got %q", payload.Network)
+	}
+	if payload.CodeVerifier == "" {
+		t.Fatalf("expected state payload to include PKCE code verifier")
 	}
 }

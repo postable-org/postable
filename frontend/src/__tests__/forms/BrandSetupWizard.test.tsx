@@ -3,12 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BrandSetupWizard from '@/components/forms/BrandSetupWizard';
 
-// Mock the brands API
 vi.mock('@/lib/api/brands', () => ({
   createBrand: vi.fn(),
 }));
 
-// Mock next/navigation
+vi.mock('@/lib/api/competitors', () => ({
+  updateCompetitors: vi.fn(),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),
@@ -18,16 +20,10 @@ vi.mock('next/navigation', () => ({
 
 import { createBrand } from '@/lib/api/brands';
 
-/**
- * Selects a state value from the shadcn/base-ui Select combobox.
- * Opens the dropdown by clicking the trigger, then clicks the option.
- */
 async function selectState(user: ReturnType<typeof userEvent.setup>, stateCode: string) {
-  const trigger = screen.getByRole('combobox');
-  await user.click(trigger);
-  // Options are rendered in a portal; wait for them to appear
-  const option = await screen.findByRole('option', { name: stateCode });
-  await user.click(option);
+  const selects = screen.getAllByRole('combobox');
+  const stateSelect = selects[selects.length - 1];
+  await user.selectOptions(stateSelect, stateCode);
 }
 
 describe('BrandSetupWizard', () => {
@@ -35,111 +31,112 @@ describe('BrandSetupWizard', () => {
     vi.clearAllMocks();
   });
 
-  it('renders step 1 (niche + location) on mount', () => {
+  it('renders step 0 (company name) on mount', () => {
     render(<BrandSetupWizard />);
-    expect(screen.getByText(/nicho/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/padaria|academia|clínica/i)).toBeInTheDocument();
+    expect(screen.getByText(/como se chama sua empresa/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/studio bella|techflow|padaria/i)).toBeInTheDocument();
   });
 
-  it('does not advance if required fields are empty', async () => {
+  it('does not advance if company name is empty', async () => {
     const user = userEvent.setup();
     render(<BrandSetupWizard />);
 
-    const nextButton = screen.getByRole('button', { name: /próximo/i });
-    await user.click(nextButton);
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
 
-    // Should still be on step 1
-    expect(screen.getByPlaceholderText(/padaria|academia|clínica/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/studio bella|techflow|padaria/i)).toBeInTheDocument();
   });
 
-  it('advances to step 2 when step 1 is valid', async () => {
+  it('advances to step 1 (niche) when step 0 is valid', async () => {
     const user = userEvent.setup();
     render(<BrandSetupWizard />);
 
-    await user.type(screen.getByPlaceholderText(/padaria|academia|clínica/i), 'padaria');
-    await user.type(screen.getByPlaceholderText(/são paulo/i), 'São Paulo');
-    await selectState(user, 'SP');
-
-    await user.click(screen.getByRole('button', { name: /próximo/i }));
+    await user.type(screen.getByPlaceholderText(/studio bella|techflow|padaria/i), 'padaria');
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/formal/i)).toBeInTheDocument();
+      expect(screen.getByText(/qual é o nicho do seu negócio/i)).toBeInTheDocument();
     });
   });
 
-  it('StepToneOfVoice shows 5 predefined options plus Outro', async () => {
+  it('StepToneOfVoice shows predefined options including Personalizado', async () => {
     const user = userEvent.setup();
     render(<BrandSetupWizard />);
 
-    await user.type(screen.getByPlaceholderText(/padaria|academia|clínica/i), 'padaria');
-    await user.type(screen.getByPlaceholderText(/são paulo/i), 'São Paulo');
+    await user.type(screen.getByPlaceholderText(/studio bella|techflow|padaria/i), 'Test Co');
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+
+    await waitFor(() => expect(screen.getByText(/nicho/i)).toBeInTheDocument());
+    await user.click(screen.getByText(/alimentação/i));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+
+    await waitFor(() => expect(screen.getByText(/tamanho/i)).toBeInTheDocument());
+    await user.click(screen.getByText(/só eu/i));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+
+    await waitFor(() => expect(screen.getByText(/onde sua empresa está/i)).toBeInTheDocument());
+    await user.type(screen.getByPlaceholderText(/são paulo|rio de janeiro/i), 'São Paulo');
     await selectState(user, 'SP');
-    await user.click(screen.getByRole('button', { name: /próximo/i }));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/formal/i)).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByText(/como você fala com seus clientes/i)).toBeInTheDocument());
 
+    expect(screen.getByText(/formal/i)).toBeInTheDocument();
     expect(screen.getByText(/casual/i)).toBeInTheDocument();
     expect(screen.getByText(/ousado/i)).toBeInTheDocument();
     expect(screen.getByText(/amigável/i)).toBeInTheDocument();
     expect(screen.getByText(/profissional/i)).toBeInTheDocument();
-    expect(screen.getByText(/outro/i)).toBeInTheDocument();
+    expect(screen.getByText(/personalizado/i)).toBeInTheDocument();
   });
 
-  it('selecting Outro reveals free-text input', async () => {
+  it('selecting Personalizado reveals free-text input', async () => {
     const user = userEvent.setup();
     render(<BrandSetupWizard />);
 
-    await user.type(screen.getByPlaceholderText(/padaria|academia|clínica/i), 'padaria');
-    await user.type(screen.getByPlaceholderText(/são paulo/i), 'São Paulo');
+    await user.type(screen.getByPlaceholderText(/studio bella|techflow|padaria/i), 'Test');
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+    await waitFor(() => expect(screen.getByText(/nicho/i)).toBeInTheDocument());
+    await user.click(screen.getByText(/alimentação/i));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+    await waitFor(() => expect(screen.getByText(/tamanho/i)).toBeInTheDocument());
+    await user.click(screen.getByText(/só eu/i));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+    await waitFor(() => expect(screen.getByText(/onde sua empresa está/i)).toBeInTheDocument());
+    await user.type(screen.getByPlaceholderText(/são paulo|rio de janeiro/i), 'São Paulo');
     await selectState(user, 'SP');
-    await user.click(screen.getByRole('button', { name: /próximo/i }));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/outro/i)).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByText(/personalizado/i)).toBeInTheDocument());
 
-    // Free text should NOT be visible yet
-    expect(screen.queryByPlaceholderText(/descreva/i)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/direto ao ponto|descreva seu tom/i)).not.toBeInTheDocument();
 
-    // Select Outro
-    await user.click(screen.getByText(/outro/i));
+    await user.click(screen.getByText(/personalizado/i));
 
-    // Free text input should now be visible
-    expect(screen.getByPlaceholderText(/descreva/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/direto ao ponto|descreva seu tom/i)).toBeInTheDocument();
   });
 
-  it('selecting a predefined option hides free-text input', async () => {
+  it('selecting a predefined tone hides free-text input', async () => {
     const user = userEvent.setup();
     render(<BrandSetupWizard />);
 
-    await user.type(screen.getByPlaceholderText(/padaria|academia|clínica/i), 'padaria');
-    await user.type(screen.getByPlaceholderText(/são paulo/i), 'São Paulo');
+    await user.type(screen.getByPlaceholderText(/studio bella|techflow|padaria/i), 'Test');
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+    await waitFor(() => expect(screen.getByText(/nicho/i)).toBeInTheDocument());
+    await user.click(screen.getByText(/alimentação/i));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+    await waitFor(() => expect(screen.getByText(/tamanho/i)).toBeInTheDocument());
+    await user.click(screen.getByText(/só eu/i));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+    await waitFor(() => expect(screen.getByText(/onde sua empresa está/i)).toBeInTheDocument());
+    await user.type(screen.getByPlaceholderText(/são paulo|rio de janeiro/i), 'São Paulo');
     await selectState(user, 'SP');
-    await user.click(screen.getByRole('button', { name: /próximo/i }));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/outro/i)).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByText(/personalizado/i)).toBeInTheDocument());
+    await user.click(screen.getByText(/personalizado/i));
+    expect(screen.getByPlaceholderText(/direto ao ponto|descreva seu tom/i)).toBeInTheDocument();
 
-    // Select Outro first
-    await user.click(screen.getByText(/outro/i));
-    expect(screen.getByPlaceholderText(/descreva/i)).toBeInTheDocument();
-
-    // Now select a predefined option
     await user.click(screen.getByText(/formal/i));
-
-    // Free text should be hidden again
-    expect(screen.queryByPlaceholderText(/descreva/i)).not.toBeInTheDocument();
-  });
-
-  it('competitor handles field is NOT present anywhere in the wizard', () => {
-    render(<BrandSetupWizard />);
-    expect(screen.queryByText(/competitor/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/concorrente/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/handles/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/@/)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/direto ao ponto|descreva seu tom/i)).not.toBeInTheDocument();
   });
 
   it('final step calls createBrand() with collected form data on submit', async () => {
@@ -160,25 +157,36 @@ describe('BrandSetupWizard', () => {
     const user = userEvent.setup();
     render(<BrandSetupWizard />);
 
-    // Step 1
-    await user.type(screen.getByPlaceholderText(/padaria|academia|clínica/i), 'padaria');
-    await user.type(screen.getByPlaceholderText(/são paulo/i), 'São Paulo');
+    await user.type(screen.getByPlaceholderText(/studio bella|techflow|padaria/i), 'Padaria');
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+
+    await waitFor(() => expect(screen.getByText(/nicho/i)).toBeInTheDocument());
+    await user.click(screen.getByText(/outro/i));
+    await user.type(screen.getByPlaceholderText(/consultoria|pet shop|tatuagem/i), 'padaria');
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+
+    await waitFor(() => expect(screen.getByText(/tamanho/i)).toBeInTheDocument());
+    await user.click(screen.getByText(/só eu/i));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
+
+    await waitFor(() => expect(screen.getByText(/onde sua empresa está/i)).toBeInTheDocument());
+    await user.type(screen.getByPlaceholderText(/são paulo|rio de janeiro/i), 'São Paulo');
     await selectState(user, 'SP');
-    await user.click(screen.getByRole('button', { name: /próximo/i }));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
 
-    // Step 2
-    await waitFor(() => expect(screen.getByText(/formal/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/como você fala com seus clientes/i)).toBeInTheDocument());
     await user.click(screen.getByText(/formal/i));
-    await user.click(screen.getByRole('button', { name: /próximo/i }));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
 
-    // Step 3
     await waitFor(() => expect(screen.getByText(/whatsapp/i)).toBeInTheDocument());
     await user.click(screen.getByText(/whatsapp/i));
-    await user.click(screen.getByRole('button', { name: /próximo/i }));
+    await user.click(screen.getByRole('button', { name: /continuar/i }));
 
-    // Step 4
-    await waitFor(() => expect(screen.getByRole('button', { name: /confirmar/i })).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: /confirmar/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /pular esta etapa/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /pular esta etapa/i }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /criar minha marca/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /criar minha marca/i }));
 
     await waitFor(() => {
       expect(mockCreateBrand).toHaveBeenCalledWith(

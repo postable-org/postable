@@ -243,11 +243,6 @@ export function Sidebar({
             strokeWidth={pathname === "/settings" ? 2 : 1.8}
             style={{ color: pathname === "/settings" ? "#f8f5ef" : "rgba(248,245,239,0.3)" }}
           />
-          <Settings
-            size={15}
-            strokeWidth={1.8}
-            style={{ color: "rgba(248,245,239,0.3)" }}
-          />
           Configurações
         </Link>
       </div>

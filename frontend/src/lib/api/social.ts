@@ -99,9 +99,20 @@ export async function upsertSocialConnection(
 export async function startSocialOAuth(
   network: SocialNetwork,
 ): Promise<string> {
-  const res = await ensureOk(
-    await apiFetch(`/api/social/oauth/${network}/start`),
-  );
+  const res = await apiFetch(`/api/social/oauth/${network}/start`);
+  if (res.status === 401) {
+    throw new Error(
+      "Sua sessão expirou. Faça login novamente e tente conectar a rede.",
+    );
+  }
+  if (!res.ok) {
+    let message = "Falha ao iniciar OAuth";
+    try {
+      const body = await res.json();
+      message = body.error ?? message;
+    } catch {}
+    throw new Error(message);
+  }
   const body = await res.json();
   return body.auth_url as string;
 }

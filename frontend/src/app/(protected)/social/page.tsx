@@ -6,7 +6,6 @@ import {
   getSocialJobs,
   publishSocialPost,
   startSocialOAuth,
-  upsertSocialConnection,
   type SocialConnection,
   type SocialJob,
   type SocialNetwork,
@@ -74,10 +73,67 @@ const NETWORKS: Array<{
     id: "x",
     label: "X",
     color: "#111111",
-    description: "Publica texto via API v2. Hoje a conexão é manual por token.",
+    description:
+      "Publica texto via OAuth oficial da API v2, sem copiar token manual.",
+    oauth: "x",
     Icon: Twitter,
   },
 ];
+
+function oauthGuide(network: SocialNetwork | undefined): {
+  title: string;
+  steps: string[];
+  note: string;
+} {
+  switch (network) {
+    case "linkedin":
+      return {
+        title: "Passo a passo para conectar LinkedIn",
+        steps: [
+          "Certifique-se de estar logado no Postable.",
+          "Clique no botão abaixo para abrir o login do LinkedIn.",
+          "Autorize o escopo de publicação (w_member_social).",
+          "Você será redirecionado de volta com a conta conectada.",
+        ],
+        note: "Se der erro, faça logout e login novamente. O administrador precisa configurar LINKEDIN_CLIENT_ID e LINKEDIN_CLIENT_SECRET no backend.",
+      };
+    case "reddit":
+      return {
+        title: "Passo a passo para conectar Reddit",
+        steps: [
+          "Certifique-se de estar logado no Postable.",
+          "Clique no botão abaixo para abrir o consentimento do Reddit.",
+          "Autorize os escopos de identidade e publicação.",
+          "Você será redirecionado de volta com a conta conectada.",
+        ],
+        note: "Se der erro, faça logout e login novamente. O administrador precisa configurar REDDIT_CLIENT_ID e REDDIT_CLIENT_SECRET no backend.",
+      };
+    case "x":
+      return {
+        title: "Passo a passo para conectar X",
+        steps: [
+          "Certifique-se de estar logado no Postable.",
+          "Clique no botão abaixo para abrir a autorização oficial do X.",
+          "Autorize o acesso à conta para publicar via API v2.",
+          "Você será redirecionado de volta com a conta conectada.",
+        ],
+        note: "Se der erro, faça logout e login novamente. O administrador precisa configurar X_CLIENT_ID (e opcionalmente X_CLIENT_SECRET) no backend.",
+      };
+    case "facebook":
+    case "instagram":
+    default:
+      return {
+        title: `Passo a passo para conectar ${networkMeta(network ?? "instagram").label}`,
+        steps: [
+          "Certifique-se de estar logado no Postable.",
+          "Clique no botão abaixo para ir ao login da Meta.",
+          "Autorize o acesso à sua conta e páginas.",
+          "Você será redirecionado de volta com a conta conectada.",
+        ],
+        note: "Se der erro, faça logout e login novamente. O administrador precisa configurar FACEBOOK_APP_ID e FACEBOOK_APP_SECRET no backend (veja SOCIAL_SETUP.md).",
+      };
+  }
+}
 
 function networkMeta(network: SocialNetwork) {
   return NETWORKS.find((item) => item.id === network) ?? NETWORKS[0];
@@ -125,13 +181,6 @@ export default function SocialPage() {
     mediaUrls: "",
     publishAt: "",
   });
-  const [manualForm, setManualForm] = useState({
-    network: "x" as SocialNetwork,
-    accountId: "",
-    accountName: "",
-    accessToken: "",
-    refreshToken: "",
-  });
 
   const filteredConnections = useMemo(
     () =>
@@ -141,6 +190,7 @@ export default function SocialPage() {
     [connections, publishForm.network],
   );
   const activeNetworkMeta = networkMeta(activeNetwork);
+  const oauthHelp = oauthGuide(activeNetworkMeta.oauth);
 
   useEffect(() => {
     if (window.location.search.includes("status=")) {
@@ -149,7 +199,11 @@ export default function SocialPage() {
   }, []);
 
   useEffect(() => {
-    Promise.all([getSocialConnections(), getSocialJobs(), getPosts()])
+    Promise.all([
+      getSocialConnections(),
+      getSocialJobs(),
+      getPosts().catch(() => [] as Post[]),
+    ])
       .then(([connectionsData, jobsData, postsData]) => {
         setConnections(connectionsData);
         setJobs(jobsData);
@@ -193,41 +247,6 @@ export default function SocialPage() {
       setFeedback({
         tone: "error",
         text: error instanceof Error ? error.message : "Falha ao iniciar OAuth",
-      });
-    }
-  }
-
-  async function handleManualConnectionSubmit(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-    try {
-      const connection = await upsertSocialConnection({
-        network: manualForm.network,
-        account_id: manualForm.accountId,
-        account_name: manualForm.accountName,
-        access_token: manualForm.accessToken,
-        refresh_token: manualForm.refreshToken || undefined,
-      });
-      setFeedback({
-        tone: "success",
-        text: `${networkMeta(connection.network).label} conectado manualmente.`,
-      });
-      setManualForm((current) => ({
-        ...current,
-        accountId: "",
-        accountName: "",
-        accessToken: "",
-        refreshToken: "",
-      }));
-      refreshData();
-    } catch (error) {
-      setFeedback({
-        tone: "error",
-        text:
-          error instanceof Error
-            ? error.message
-            : "Falha ao salvar conexão manual",
       });
     }
   }
@@ -370,132 +389,48 @@ export default function SocialPage() {
 
           <div className="space-y-4">
             {activeNetworkMeta.oauth ? (
-              <button
-                onClick={() => handleOAuth(activeNetworkMeta.oauth!)}
-                className="w-full rounded-2xl px-4 py-3 text-sm font-medium"
-                style={{
-                  backgroundColor: "#0a0a0a",
-                  color: "#f8f5ef",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                Conectar {activeNetworkMeta.label} via OAuth oficial
-              </button>
-            ) : (
-              <div
-                className="rounded-2xl p-4 text-sm"
-                style={{
-                  backgroundColor: "#f0ede7",
-                  color: "#6b6258",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                Esta rede está em modo de conexão manual no momento. Informe
-                account id e token abaixo.
-              </div>
-            )}
-
-            <form onSubmit={handleManualConnectionSubmit} className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <select
-                  value={manualForm.network}
-                  onChange={(event) =>
-                    setManualForm((current) => ({
-                      ...current,
-                      network: event.target.value as SocialNetwork,
-                    }))
-                  }
-                  className="rounded-2xl px-4 py-3 text-sm"
+              <div className="space-y-3">
+                <div
+                  className="rounded-2xl p-4 space-y-2"
                   style={{
                     backgroundColor: "#f8f5ef",
                     border: "1px solid #e4e0d8",
+                  }}
+                >
+                  <p
+                    className="text-xs font-medium"
+                    style={{ color: "#0a0a0a", fontFamily: "var(--font-body)" }}
+                  >
+                    {oauthHelp.title}
+                  </p>
+                  <ol
+                    className="text-xs space-y-1 pl-4 list-decimal"
+                    style={{ color: "#6b6258", fontFamily: "var(--font-body)" }}
+                  >
+                    {oauthHelp.steps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                  <p
+                    className="text-[11px] pt-1"
+                    style={{ color: "#8c8880", fontFamily: "var(--font-body)" }}
+                  >
+                    {oauthHelp.note}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleOAuth(activeNetworkMeta.oauth!)}
+                  className="w-full rounded-2xl px-4 py-3 text-sm font-medium"
+                  style={{
+                    backgroundColor: "#0a0a0a",
+                    color: "#f8f5ef",
                     fontFamily: "var(--font-body)",
                   }}
                 >
-                  {NETWORKS.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={manualForm.accountId}
-                  onChange={(event) =>
-                    setManualForm((current) => ({
-                      ...current,
-                      accountId: event.target.value,
-                    }))
-                  }
-                  placeholder="Account ID / Page ID / URN"
-                  className="rounded-2xl px-4 py-3 text-sm"
-                  style={{
-                    backgroundColor: "#f8f5ef",
-                    border: "1px solid #e4e0d8",
-                    fontFamily: "var(--font-body)",
-                  }}
-                />
+                  Conectar {activeNetworkMeta.label} via OAuth oficial
+                </button>
               </div>
-              <input
-                value={manualForm.accountName}
-                onChange={(event) =>
-                  setManualForm((current) => ({
-                    ...current,
-                    accountName: event.target.value,
-                  }))
-                }
-                placeholder="Nome da conta"
-                className="w-full rounded-2xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #e4e0d8",
-                  fontFamily: "var(--font-body)",
-                }}
-              />
-              <textarea
-                value={manualForm.accessToken}
-                onChange={(event) =>
-                  setManualForm((current) => ({
-                    ...current,
-                    accessToken: event.target.value,
-                  }))
-                }
-                placeholder="Access token"
-                rows={4}
-                className="w-full rounded-2xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #e4e0d8",
-                  fontFamily: "var(--font-body)",
-                }}
-              />
-              <input
-                value={manualForm.refreshToken}
-                onChange={(event) =>
-                  setManualForm((current) => ({
-                    ...current,
-                    refreshToken: event.target.value,
-                  }))
-                }
-                placeholder="Refresh token (opcional)"
-                className="w-full rounded-2xl px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: "#f8f5ef",
-                  border: "1px solid #e4e0d8",
-                  fontFamily: "var(--font-body)",
-                }}
-              />
-              <button
-                type="submit"
-                className="w-full rounded-2xl px-4 py-3 text-sm font-medium"
-                style={{
-                  backgroundColor: "#f0ede7",
-                  color: "#0a0a0a",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                Salvar conexão manual
-              </button>
-            </form>
+            ) : null}
 
             <div className="space-y-2 pt-2">
               {connections.length === 0 ? (
