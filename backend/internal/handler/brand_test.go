@@ -144,7 +144,7 @@ func TestCreateBrand_Success(t *testing.T) {
 }
 
 func TestGetBrand_NotFound(t *testing.T) {
-	svc := &MockBrandService{brand: nil, err: handler.ErrBrandNotFound}
+	svc := &MockBrandService{brand: nil, err: service.ErrBrandNotFound}
 	router := buildBrandRouter(svc)
 
 	token := makeTestJWT(t, "user-abc")

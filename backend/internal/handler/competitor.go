@@ -38,7 +38,7 @@ func (h *CompetitorHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	brand, err := h.brandSvc.GetByUserID(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, ErrBrandNotFound) || errors.Is(err, service.ErrBrandNotFound) {
+		if errors.Is(err, service.ErrBrandNotFound) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "brand not found"})
 			return
 		}
@@ -81,7 +81,7 @@ func (h *CompetitorHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 
 	brand, err := h.brandSvc.GetByUserID(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, ErrBrandNotFound) || errors.Is(err, service.ErrBrandNotFound) {
+		if errors.Is(err, service.ErrBrandNotFound) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "brand not found"})
 			return
 		}

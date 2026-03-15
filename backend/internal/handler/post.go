@@ -9,12 +9,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"postable/internal/middleware"
 	"postable/internal/service"
 )
 
 // PostServiceInterface defines the operations needed by the post handler and generate handler.
 type PostServiceInterface interface {
-	Create(ctx context.Context, userID, brandID string, contentJSON, trendContext []byte) (*service.Post, error)
+	Create(ctx context.Context, userID, brandID string, contentJSON, trendContext []byte, platform string) (*service.Post, error)
 	GetByID(ctx context.Context, id, userID string) (*service.Post, error)
 	ListByUserID(ctx context.Context, userID string) ([]service.Post, error)
 	UpdateStatus(ctx context.Context, id, userID, status string) (*service.Post, error)
@@ -128,6 +129,16 @@ func (h *PostHandler) GetPostInsights(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		slog.Warn("post insights: unauthorized")
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	// Analytics gating — requires Advanced or Agency plan
+	sub, hasSub := middleware.SubscriptionFromContext(r.Context())
+	if !hasSub || !service.PlanLimitsFor(sub.Plan).AnalyticsEnabled {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error":         "plan_upgrade_required",
+			"required_plan": "advanced",
+		})
 		return
 	}
 

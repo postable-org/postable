@@ -18,6 +18,11 @@ type CompetitorServiceForGenerateInterface interface {
 	ActiveSnapshotsForGenerate(ctx context.Context, userID, brandID string) ([]json.RawMessage, error)
 }
 
+// QuotaChecker can check whether a user is allowed to generate a post for a given platform.
+type QuotaChecker interface {
+	CheckQuota(ctx context.Context, userID, platform string) (allowed bool, used, limit int, err error)
+}
+
 // generatePayload is the enriched payload sent to the Python agent.
 type generatePayload struct {
 	ID          string `json:"id"`
@@ -28,11 +33,20 @@ type generatePayload struct {
 	ToneOfVoice string `json:"tone_of_voice"`
 	ToneCustom  string `json:"tone_custom,omitempty"`
 	CTAChannel  string `json:"cta_channel,omitempty"`
+	Platform    string `json:"platform,omitempty"`
 
 	CompetitorSnapshots  []json.RawMessage `json:"competitor_snapshots"`
 	LocalityBasis        string            `json:"locality_basis"`
 	LocalityStateKey     string            `json:"locality_state_key"`
 	PreviousPrimaryTheme string            `json:"previous_primary_theme,omitempty"`
+}
+
+var allowedPlatforms = map[string]bool{
+	"instagram": true,
+	"linkedin":  true,
+	"facebook":  true,
+	"x":         true,
+	"reddit":    true,
 }
 
 // GenerateHandler handles GET /api/generate SSE requests.
@@ -41,11 +55,17 @@ type GenerateHandler struct {
 	brandSvc      BrandServiceInterface
 	postSvc       PostServiceInterface
 	competitorSvc CompetitorServiceForGenerateInterface
+	subSvc        QuotaChecker
 }
 
 // NewGenerateHandler creates a new GenerateHandler.
 func NewGenerateHandler(svc GenerateServiceInterface, brandSvc BrandServiceInterface, postSvc PostServiceInterface, competitorSvc CompetitorServiceForGenerateInterface) *GenerateHandler {
 	return &GenerateHandler{svc: svc, brandSvc: brandSvc, postSvc: postSvc, competitorSvc: competitorSvc}
+}
+
+// NewGenerateHandlerWithQuota creates a GenerateHandler with quota checking.
+func NewGenerateHandlerWithQuota(svc GenerateServiceInterface, brandSvc BrandServiceInterface, postSvc PostServiceInterface, competitorSvc CompetitorServiceForGenerateInterface, subSvc QuotaChecker) *GenerateHandler {
+	return &GenerateHandler{svc: svc, brandSvc: brandSvc, postSvc: postSvc, competitorSvc: competitorSvc, subSvc: subSvc}
 }
 
 // Generate handles GET /api/generate — streams SSE generation events.
@@ -55,6 +75,34 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("generate: unauthorized")
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
+	}
+
+	// Read and validate platform param
+	platform := r.URL.Query().Get("platform")
+	if platform == "" {
+		platform = "instagram"
+	}
+	if !allowedPlatforms[platform] {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid platform"})
+		return
+	}
+
+	// Quota check
+	if h.subSvc != nil {
+		allowed, used, limit, err := h.subSvc.CheckQuota(r.Context(), userID, platform)
+		if err != nil {
+			slog.Warn("generate: quota check failed", "userID", userID, "error", err)
+			// On quota check failure, fall through (don't block generation)
+		} else if !allowed {
+			// Find period end from subscription context (best-effort)
+			writeJSON(w, http.StatusTooManyRequests, map[string]any{
+				"error":    "quota_exceeded",
+				"used":     used,
+				"limit":    limit,
+				"platform": platform,
+			})
+			return
+		}
 	}
 
 	brand, err := h.brandSvc.GetByUserID(r.Context(), userID)
@@ -96,6 +144,7 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		ToneOfVoice:          brand.ToneOfVoice,
 		ToneCustom:           brand.ToneCustom,
 		CTAChannel:           brand.CTAChannel,
+		Platform:             platform,
 		CompetitorSnapshots:  snapshots,
 		LocalityBasis:        "state",
 		LocalityStateKey:     brand.State,
@@ -109,7 +158,7 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("generate: starting stream", "userID", userID)
+	slog.Info("generate: starting stream", "userID", userID, "platform", platform)
 	responseJSON, streamErr := h.svc.StreamAndReturn(r.Context(), string(brandJSON), w)
 	if streamErr != nil {
 		slog.Warn("generate: stream ended with error", "userID", userID, "error", streamErr)
@@ -122,11 +171,11 @@ func (h *GenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		// Save the generated post to DB. Use a background context so DB write
 		// isn't cancelled if the HTTP request context is already done.
 		saveCtx := context.Background()
-		_, saveErr := h.postSvc.Create(saveCtx, userID, brand.ID, responseJSON, trendContextJSON)
+		_, saveErr := h.postSvc.Create(saveCtx, userID, brand.ID, responseJSON, trendContextJSON, platform)
 		if saveErr != nil {
 			slog.Error("generate: failed to save post", "userID", userID, "error", saveErr)
 		} else {
-			slog.Info("generate: post saved", "userID", userID)
+			slog.Info("generate: post saved", "userID", userID, "platform", platform)
 		}
 	}
 }

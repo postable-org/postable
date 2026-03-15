@@ -12,6 +12,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
+	stripe "github.com/stripe/stripe-go/v76"
 
 	"postable/internal/handler"
 	"postable/internal/middleware"
@@ -47,6 +48,9 @@ func loadEnv(path string) {
 func main() {
 	loadEnv(".env")
 	middleware.Init()
+
+	// Configure Stripe
+	stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
 
 	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
@@ -88,29 +92,55 @@ func main() {
 	competitorSvc := service.NewCompetitorService(dbPool)
 	postSvc := service.NewPostService(dbPool)
 	generateSvc := service.NewGenerateService()
+	subSvc := service.NewSubscriptionService(dbPool)
 
-	// Authenticated routes
+	// Stripe price → plan mapping (monthly + yearly for each plan)
+	priceToplan := map[string]string{
+		os.Getenv("STRIPE_PRICE_BASIC_MONTHLY"):    "basic",
+		os.Getenv("STRIPE_PRICE_BASIC_YEARLY"):     "basic",
+		os.Getenv("STRIPE_PRICE_ADVANCED_MONTHLY"): "advanced",
+		os.Getenv("STRIPE_PRICE_ADVANCED_YEARLY"):  "advanced",
+		os.Getenv("STRIPE_PRICE_AGENCY_MONTHLY"):   "agency",
+		os.Getenv("STRIPE_PRICE_AGENCY_YEARLY"):    "agency",
+	}
+
+	// Webhook handler (public — no JWT)
+	webhookHandler := handler.NewWebhookHandler(subSvc, os.Getenv("STRIPE_WEBHOOK_SECRET"), priceToplan)
+	r.Post("/api/webhook/stripe", webhookHandler.Handle)
+
+	// JWT-authenticated routes
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Verifier())
 		r.Use(middleware.Authenticator())
 
+		// Brand setup (subscription-free — needed before subscribing)
 		brandHandler := handler.NewBrandHandler(brandSvc)
 		r.Post("/api/brands", brandHandler.Create)
 		r.Get("/api/brands", brandHandler.Get)
 		r.Put("/api/brands", brandHandler.Update)
 
-		competitorHandler := handler.NewCompetitorHandler(competitorSvc, brandSvc)
-		// GET("/api/competitors") and PUT("/api/competitors") remain authenticated.
-		r.Get("/api/competitors", competitorHandler.List)
-		r.Put("/api/competitors", competitorHandler.Upsert)
+		// Subscription management
+		checkoutHandler := handler.NewCheckoutHandler(subSvc)
+		r.Get("/api/subscription", checkoutHandler.GetSubscription)
+		r.Post("/api/checkout/session", checkoutHandler.CreateSession)
+		r.Post("/api/billing/portal", checkoutHandler.CreatePortalSession)
 
-		postHandler := handler.NewPostHandler(postSvc)
-		r.Get("/api/posts", postHandler.List)
-		r.Get("/api/posts/{id}/insights", postHandler.GetPostInsights)
-		r.Patch("/api/posts/{id}/status", postHandler.UpdateStatus)
+		// Subscription-gated routes
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireActiveSubscription(subSvc))
 
-		generateHandler := handler.NewGenerateHandler(generateSvc, brandSvc, postSvc, competitorSvc)
-		r.Get("/api/generate", generateHandler.Generate)
+			competitorHandler := handler.NewCompetitorHandler(competitorSvc, brandSvc)
+			r.Get("/api/competitors", competitorHandler.List)
+			r.Put("/api/competitors", competitorHandler.Upsert)
+
+			postHandler := handler.NewPostHandler(postSvc)
+			r.Get("/api/posts", postHandler.List)
+			r.Get("/api/posts/{id}/insights", postHandler.GetPostInsights)
+			r.Patch("/api/posts/{id}/status", postHandler.UpdateStatus)
+
+			generateHandler := handler.NewGenerateHandlerWithQuota(generateSvc, brandSvc, postSvc, competitorSvc, subSvc)
+			r.Get("/api/generate", generateHandler.Generate)
+		})
 	})
 
 	port := os.Getenv("PORT")

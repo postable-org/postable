@@ -9,7 +9,7 @@ export interface UseSSEGenerateResult {
   status: SSEStatus;
   messages: string[];
   error: string | null;
-  start: () => void;
+  start: (platform?: string) => void;
   reset: () => void;
 }
 
@@ -43,7 +43,7 @@ export function useSSEGenerate(onComplete: (content: PostContent) => void): UseS
     lastMessageRef.current = '';
   }, []);
 
-  const start = useCallback(() => {
+  const start = useCallback((platform: string = 'instagram') => {
     // Clean up any existing connection
     esRef.current?.close();
     lastMessageRef.current = '';
@@ -51,7 +51,7 @@ export function useSSEGenerate(onComplete: (content: PostContent) => void): UseS
     setError(null);
     setStatus('connecting');
 
-    const es = new EventSource('/api/generate');
+    const es = new EventSource(`/api/generate?platform=${encodeURIComponent(platform)}`);
     esRef.current = es;
 
     setStatus('streaming');

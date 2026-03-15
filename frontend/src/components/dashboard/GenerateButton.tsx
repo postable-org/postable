@@ -1,6 +1,7 @@
 "use client";
 
 import { useSSEGenerate } from "@/lib/hooks/useSSEGenerate";
+import { usePlatform } from "@/lib/context/PlatformContext";
 import type { PostContent } from "@/lib/api/posts";
 import { Sparkles, RotateCcw } from "lucide-react";
 
@@ -15,10 +16,11 @@ export function GenerateButton({
   triggerRef,
   dark,
 }: GenerateButtonProps) {
+  const { platform } = usePlatform();
   const { status, messages, error, start, reset } = useSSEGenerate(onGenerated);
 
   if (triggerRef) {
-    triggerRef.current = start;
+    triggerRef.current = () => start(platform);
   }
 
   const isActive = status === "connecting" || status === "streaming";
@@ -44,7 +46,7 @@ export function GenerateButton({
 
   return (
     <button
-      onClick={start}
+      onClick={() => start(platform)}
       disabled={isActive}
       className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-60 whitespace-nowrap"
       style={{
