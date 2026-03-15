@@ -17,6 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { getBrand, updateBrand, type BrandData } from "@/lib/api/brands";
+import { getCompetitors, updateCompetitors } from "@/lib/api/competitors";
 
 // ── Media Upload ─────────────────────────────────────────────────────────────
 
@@ -229,6 +230,7 @@ export default function ContextPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [competitors, setCompetitors] = useState<string[]>([]);
   const [competitorInput, setCompetitorInput] = useState("");
+  const [competitorLoading, setCompetitorLoading] = useState(false);
 
   // Brand / company info
   const [brandLoading, setBrandLoading] = useState(true);
@@ -244,6 +246,18 @@ export default function ContextPage() {
     tone_custom: "",
     cta_channel: "dm",
   });
+
+  useEffect(() => {
+    getCompetitors()
+      .then((res) => {
+        setCompetitors(
+          res.competitors
+            .filter((c) => c.status === "active")
+            .map((c) => c.handle)
+        );
+      })
+      .catch(() => {/* silently ignore — competitors are non-critical */});
+  }, []);
 
   useEffect(() => {
     getBrand()
@@ -289,14 +303,40 @@ export default function ContextPage() {
     });
   };
 
-  const addCompetitor = () => {
+  const addCompetitor = async () => {
     const clean = competitorInput.trim().replace(/^@/, "").toLowerCase();
     if (!clean) return;
     const handle = `@${clean}`;
-    if (!competitors.includes(handle)) {
-      setCompetitors((prev) => [...prev, handle]);
-    }
     setCompetitorInput("");
+    setCompetitorLoading(true);
+    try {
+      const res = await updateCompetitors([{ type: "add", handle }]);
+      setCompetitors(
+        res.competitors
+          .filter((c) => c.status === "active")
+          .map((c) => c.handle)
+      );
+    } catch {
+      // revert optimistically if needed — do nothing for now
+    } finally {
+      setCompetitorLoading(false);
+    }
+  };
+
+  const removeCompetitor = async (handle: string) => {
+    setCompetitorLoading(true);
+    try {
+      const res = await updateCompetitors([{ type: "remove", handle }]);
+      setCompetitors(
+        res.competitors
+          .filter((c) => c.status === "active")
+          .map((c) => c.handle)
+      );
+    } catch {
+      // ignore
+    } finally {
+      setCompetitorLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -610,11 +650,11 @@ export default function ContextPage() {
             <button
               type="button"
               onClick={addCompetitor}
-              disabled={!competitorInput.trim()}
+              disabled={!competitorInput.trim() || competitorLoading}
               className="w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-30"
               style={{ backgroundColor: "#0a0a0a", color: "#f8f5ef" }}
             >
-              <Plus size={14} strokeWidth={2.5} />
+              {competitorLoading ? <Loader2 size={12} className="animate-spin" /> : <Plus size={14} strokeWidth={2.5} />}
             </button>
           </div>
 
@@ -624,7 +664,7 @@ export default function ContextPage() {
                 <CompetitorChip
                   key={h}
                   handle={h}
-                  onRemove={() => setCompetitors((prev) => prev.filter((c) => c !== h))}
+                  onRemove={() => removeCompetitor(h)}
                 />
               ))}
             </div>

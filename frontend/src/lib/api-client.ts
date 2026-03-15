@@ -1,5 +1,12 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
 
+export class ApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 function buildURL(path: string) {
   const base = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
   const route = path.startsWith('/') ? path : `/${path}`;
@@ -45,6 +52,12 @@ export async function apiFetch(path: string, options?: RequestInit) {
     const refreshedToken = refreshed.session?.access_token;
     if (refreshedToken) {
       response = await makeRequest(refreshedToken);
+    } else {
+      // Session is definitively gone — redirect to login
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+      throw new ApiError(401, 'Unauthorized');
     }
   }
 

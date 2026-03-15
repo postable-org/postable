@@ -168,6 +168,7 @@ func displayHandle(normalized string) string {
 }
 
 // List returns current competitors and active count for the user/brand scope.
+// Only user-added competitors are returned; auto-generated ones are internal to the AI pipeline.
 func (s *CompetitorService) List(ctx context.Context, userID, brandID, stateCode string) (CompetitorListResponse, error) {
 	stateKey := NormalizeStateKey(stateCode)
 	if stateKey == "" {
@@ -178,14 +179,14 @@ func (s *CompetitorService) List(ctx context.Context, userID, brandID, stateCode
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		store := s.getOrCreateMemoryStore(userID, brandID)
-		return s.buildListResponse(store), nil
+		return filterUserCompetitors(s.buildListResponse(store)), nil
 	}
 
 	store, err := s.loadStoreFromDB(ctx, userID, brandID)
 	if err != nil {
 		return CompetitorListResponse{}, err
 	}
-	return s.buildListResponse(store), nil
+	return filterUserCompetitors(s.buildListResponse(store)), nil
 }
 
 // ApplyOperations applies edits, enforces state-level locality, and rebalances 3..7 active competitors.
@@ -206,7 +207,7 @@ func (s *CompetitorService) ApplyOperations(ctx context.Context, userID, brandID
 		}
 
 		replacements, snapshots := s.reconcileStore(store, userID, brandID, stateKey)
-		listResp := s.buildListResponse(store)
+		listResp := filterUserCompetitors(s.buildListResponse(store))
 		return CompetitorUpdateResponse{
 			Competitors:  listResp.Competitors,
 			ActiveCount:  listResp.ActiveCount,
@@ -241,7 +242,7 @@ func (s *CompetitorService) ApplyOperations(ctx context.Context, userID, brandID
 		return CompetitorUpdateResponse{}, err
 	}
 
-	listResp := s.buildListResponse(store)
+	listResp := filterUserCompetitors(s.buildListResponse(store))
 	return CompetitorUpdateResponse{
 		Competitors:  listResp.Competitors,
 		ActiveCount:  listResp.ActiveCount,
@@ -892,6 +893,26 @@ func (s *CompetitorService) buildSnapshotsForGenerate(store *competitorStore) []
 		result = append(result, entry)
 	}
 	return result
+}
+
+// filterUserCompetitors returns only user-added competitors, hiding auto-generated ones from the API response.
+// Auto competitors (source=auto) remain active internally for the AI generation pipeline.
+func filterUserCompetitors(resp CompetitorListResponse) CompetitorListResponse {
+	filtered := make([]Competitor, 0, len(resp.Competitors))
+	activeCount := 0
+	for _, c := range resp.Competitors {
+		if c.Source != competitorSourceUser {
+			continue
+		}
+		filtered = append(filtered, c)
+		if c.Status == competitorStatusActive {
+			activeCount++
+		}
+	}
+	return CompetitorListResponse{
+		Competitors: filtered,
+		ActiveCount: activeCount,
+	}
 }
 
 func extractJSONField(raw json.RawMessage, key string) string {
