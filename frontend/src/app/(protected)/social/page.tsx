@@ -112,6 +112,7 @@ export default function SocialPage() {
   const [jobs, setJobs] = useState<SocialJob[]>([]);
   const [visibleJobsCount, setVisibleJobsCount] = useState(3);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
     tone: "success" | "error";
     text: string;
@@ -263,6 +264,9 @@ export default function SocialPage() {
   }
 
   async function handlePublishSubmit(deliveryMode: "now" | "schedule") {
+    if (isSubmitting) {
+      return;
+    }
     if (!hasAnyConnections) {
       setFeedback({
         tone: "error",
@@ -354,6 +358,7 @@ export default function SocialPage() {
     }
 
     try {
+      setIsSubmitting(true);
       const response = await publishSocialPost({
         network: publishForm.network,
         connection_id: publishForm.connectionId || undefined,
@@ -381,6 +386,13 @@ export default function SocialPage() {
             ? "Post publicado agora."
             : "Post agendado com sucesso.",
       });
+      setJobs((current) => {
+        const withoutDuplicate = current.filter(
+          (job) => job.id !== response.job.id,
+        );
+        return [response.job, ...withoutDuplicate];
+      });
+      setVisibleJobsCount((count) => (count < 3 ? 3 : count));
       setPublishForm((current) => ({
         ...current,
         title: "",
@@ -397,6 +409,8 @@ export default function SocialPage() {
         tone: "error",
         text: error instanceof Error ? error.message : "Falha ao publicar",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -774,22 +788,30 @@ export default function SocialPage() {
                 <div className="flex gap-3 justify-end">
                   <button
                     type="submit"
-                    disabled={publishBlocked}
+                    disabled={publishBlocked || isSubmitting}
                     className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    <Send size={15} />
-                    Publicar agora
+                    {isSubmitting ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Send size={15} />
+                    )}
+                    {isSubmitting ? "Publicando..." : "Publicar agora"}
                   </button>
                   <button
                     type="button"
-                    disabled={publishBlocked}
+                    disabled={publishBlocked || isSubmitting}
                     onClick={() => {
                       void handlePublishSubmit("schedule");
                     }}
                     className="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    <Radio size={15} />
-                    Agendar
+                    {isSubmitting ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Radio size={15} />
+                    )}
+                    {isSubmitting ? "Agendando..." : "Agendar"}
                   </button>
                 </div>
               </div>
