@@ -37,7 +37,7 @@ const (
 
 var (
 	ErrSocialUnavailable     = errors.New("social publishing requires database")
-	ErrInvalidNetwork        = errors.New("invalid network: must be linkedin, facebook, instagram, or x")
+	ErrInvalidNetwork        = errors.New("invalid network: must be linkedin, facebook, or instagram")
 	ErrConnectionNotFound    = errors.New("social connection not found")
 	ErrPublishPayloadInvalid = errors.New("invalid publish payload")
 	ErrPostTextNotFound      = errors.New("post content text not found")
@@ -152,7 +152,6 @@ func NewSocialService(db *pgxpool.Pool, publishers map[string]SocialPublisher) *
 			SocialNetworkLinkedIn:  NewLinkedInPublisher(defaultClient),
 			SocialNetworkFacebook:  NewFacebookPublisher(defaultClient),
 			SocialNetworkInstagram: NewInstagramPublisher(defaultClient),
-			SocialNetworkX:         NewXPublisher(defaultClient),
 		}
 	}
 	return &SocialService{db: db, publishers: publishers}
@@ -160,7 +159,7 @@ func NewSocialService(db *pgxpool.Pool, publishers map[string]SocialPublisher) *
 
 func IsValidSocialNetwork(network string) bool {
 	switch strings.ToLower(strings.TrimSpace(network)) {
-	case SocialNetworkLinkedIn, SocialNetworkFacebook, SocialNetworkInstagram, SocialNetworkX:
+	case SocialNetworkLinkedIn, SocialNetworkFacebook, SocialNetworkInstagram:
 		return true
 	default:
 		return false

@@ -1,6 +1,5 @@
 "use client";
 
-import { XLogo } from "@/components/icons/XLogo";
 import {
   deleteSocialConnection,
   getSocialConnections,
@@ -75,15 +74,6 @@ const SOCIAL_PLATFORMS = [
     Icon: Facebook,
     color: "#1877F2",
     bgColor: "#EEF4FF",
-  },
-  {
-    id: "x",
-    label: "X (Twitter)",
-    description: "Conversas em tempo real",
-    oauth: "x",
-    Icon: XLogo,
-    color: "#000000",
-    bgColor: "#F2F2F2",
   },
 ] as const;
 

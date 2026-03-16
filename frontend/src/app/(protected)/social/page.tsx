@@ -1,6 +1,5 @@
 "use client";
 
-import { XLogo } from "@/components/icons/XLogo";
 import { getPostById, getPosts, type Post } from "@/lib/api/posts";
 import {
   getSocialConnections,
@@ -69,14 +68,6 @@ const NETWORKS: Array<{
     description: "Publica no perfil autenticado com escopo.",
     oauth: "linkedin",
     Icon: Linkedin,
-  },
-  {
-    id: "x",
-    label: "X",
-    color: "#111111",
-    description: "Publica somente texto.",
-    oauth: "x",
-    Icon: XLogo,
   },
 ];
 
@@ -174,7 +165,6 @@ export default function SocialPage() {
   const publishBlocked =
     !hasAnyConnections || !hasConnectionsForSelectedNetwork;
   const selectedNetworkMeta = networkMeta(publishForm.network);
-  const isXNetwork = publishForm.network === "x";
   const selectedNetworkConnectionsCount = filteredConnections.length;
   const visibleJobs = useMemo(
     () => jobs.slice(0, visibleJobsCount),
@@ -287,14 +277,6 @@ export default function SocialPage() {
       });
       return;
     }
-    if (isXNetwork && deliveryMode === "schedule") {
-      setFeedback({
-        tone: "error",
-        text: "No X, a publicação está disponível apenas em modo texto e publicação imediata.",
-      });
-      return;
-    }
-
     if (publishForm.source === "manual" && !publishForm.text.trim()) {
       setFeedback({
         tone: "error",
@@ -331,9 +313,8 @@ export default function SocialPage() {
       }
     }
 
-    const effectiveMediaUrls = isXNetwork
-      ? []
-      : uploadedMediaUrls.length > 0
+    const effectiveMediaUrls =
+      uploadedMediaUrls.length > 0
         ? uploadedMediaUrls
         : dbGeneratedPost?.image_url
           ? [dbGeneratedPost.image_url]
@@ -350,11 +331,8 @@ export default function SocialPage() {
     }
 
     const inputHashtags = parseListField(publishForm.hashtags, "#");
-    const hashtags = isXNetwork
-      ? []
-      : inputHashtags.length > 0
-        ? inputHashtags
-        : (dbGeneratedPost?.hashtags ?? []);
+    const hashtags =
+      inputHashtags.length > 0 ? inputHashtags : (dbGeneratedPost?.hashtags ?? []);
     const instagramTags = parseListField(publishForm.instagramTags, "@");
     if (
       publishForm.network === "instagram" &&
@@ -391,9 +369,8 @@ export default function SocialPage() {
         hashtags,
         instagram_tags:
           publishForm.network === "instagram" ? instagramTags : undefined,
-        publish_at: isXNetwork
-          ? undefined
-          : deliveryMode === "schedule" && publishForm.publishAt
+        publish_at:
+          deliveryMode === "schedule" && publishForm.publishAt
             ? new Date(publishForm.publishAt).toISOString()
             : undefined,
       });
@@ -495,19 +472,15 @@ export default function SocialPage() {
                   onChange={(event) =>
                     setPublishForm((current) => {
                       const nextNetwork = event.target.value as SocialNetwork;
-                      const isNextX = nextNetwork === "x";
-                      if (isNextX) {
-                        setMediaFileItems([]);
-                      }
                       return {
                         ...current,
                         network: nextNetwork,
                         connectionId: "",
-                        source: isNextX ? "manual" : current.source,
-                        postId: isNextX ? "" : current.postId,
-                        hashtags: isNextX ? "" : current.hashtags,
-                        instagramTags: isNextX ? "" : current.instagramTags,
-                        publishAt: isNextX ? "" : current.publishAt,
+                        source: current.source,
+                        postId: current.postId,
+                        hashtags: current.hashtags,
+                        instagramTags: current.instagramTags,
+                        publishAt: current.publishAt,
                       };
                     })
                   }
@@ -539,37 +512,35 @@ export default function SocialPage() {
               </div>
 
               {/* Fonte do conteúdo */}
-              {!isXNetwork && (
-                <div className="pill-bar w-fit">
-                  {(
-                    [
-                      { id: "manual", label: "Escrever agora" },
-                      { id: "generated", label: "Usar post gerado" },
-                    ] as const
-                  ).map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() =>
-                        setPublishForm((current) => ({
-                          ...current,
-                          source: item.id,
-                          postId: item.id === "manual" ? "" : current.postId,
-                        }))
-                      }
-                      className={`pill-item ${
-                        publishForm.source === item.id
-                          ? "pill-item-active"
-                          : "pill-item-inactive"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="pill-bar w-fit">
+                {(
+                  [
+                    { id: "manual", label: "Escrever agora" },
+                    { id: "generated", label: "Usar post gerado" },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() =>
+                      setPublishForm((current) => ({
+                        ...current,
+                        source: item.id,
+                        postId: item.id === "manual" ? "" : current.postId,
+                      }))
+                    }
+                    className={`pill-item ${
+                      publishForm.source === item.id
+                        ? "pill-item-active"
+                        : "pill-item-inactive"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
 
-              {!isXNetwork && publishForm.source === "generated" ? (
+              {publishForm.source === "generated" ? (
                 <select
                   value={publishForm.postId}
                   onChange={async (event) => {
@@ -642,21 +613,19 @@ export default function SocialPage() {
                 className="textarea-field"
               />
 
-              {!isXNetwork && (
-                <div className="space-y-2">
-                  <input
-                    value={publishForm.hashtags}
-                    onChange={(event) =>
-                      setPublishForm((current) => ({
-                        ...current,
-                        hashtags: event.target.value,
-                      }))
-                    }
-                    placeholder="Hashtags (ex: #marketing #social)"
-                    className="input-field"
-                  />
-                </div>
-              )}
+              <div className="space-y-2">
+                <input
+                  value={publishForm.hashtags}
+                  onChange={(event) =>
+                    setPublishForm((current) => ({
+                      ...current,
+                      hashtags: event.target.value,
+                    }))
+                  }
+                  placeholder="Hashtags (ex: #marketing #social)"
+                  className="input-field"
+                />
+              </div>
 
               {publishForm.network === "instagram" && (
                 <div className="space-y-2">
@@ -678,8 +647,7 @@ export default function SocialPage() {
                 </div>
               )}
 
-              {!isXNetwork && (
-                <div className="space-y-2">
+              <div className="space-y-2">
                   <div
                     className="rounded-2xl border-2 border-dashed border-border p-4 flex flex-col items-center gap-2 cursor-pointer hover:border-foreground/40 transition-colors"
                     onClick={() => mediaInputRef.current?.click()}
@@ -783,35 +751,26 @@ export default function SocialPage() {
                     </div>
                   )}
                 </div>
-              )}
 
               <div className="space-y-3">
-                {!isXNetwork && (
-                  <>
-                    <input
-                      type="datetime-local"
-                      value={publishForm.publishAt}
-                      onChange={(event) =>
-                        setPublishForm((current) => ({
-                          ...current,
-                          publishAt: event.target.value,
-                        }))
-                      }
-                      className="input-field"
-                      placeholder="Agendar para (opcional)"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Preencha a data para agendar, ou deixe vazio para publicar
-                      agora.
-                    </p>
-                  </>
-                )}
-                {isXNetwork && (
+                <>
+                  <input
+                    type="datetime-local"
+                    value={publishForm.publishAt}
+                    onChange={(event) =>
+                      setPublishForm((current) => ({
+                        ...current,
+                        publishAt: event.target.value,
+                      }))
+                    }
+                    className="input-field"
+                    placeholder="Agendar para (opcional)"
+                  />
                   <p className="text-xs text-muted-foreground">
-                    Para X, a publicação está temporariamente disponível apenas
-                    em texto e publicação imediata.
+                    Preencha a data para agendar, ou deixe vazio para publicar
+                    agora.
                   </p>
-                )}
+                </>
                 <div className="flex gap-3 justify-end">
                   <button
                     type="submit"
@@ -821,19 +780,17 @@ export default function SocialPage() {
                     <Send size={15} />
                     Publicar agora
                   </button>
-                  {!isXNetwork && (
-                    <button
-                      type="button"
-                      disabled={publishBlocked}
-                      onClick={() => {
-                        void handlePublishSubmit("schedule");
-                      }}
-                      className="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <Radio size={15} />
-                      Agendar
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    disabled={publishBlocked}
+                    onClick={() => {
+                      void handlePublishSubmit("schedule");
+                    }}
+                    className="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Radio size={15} />
+                    Agendar
+                  </button>
                 </div>
               </div>
             </form>

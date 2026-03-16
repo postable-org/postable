@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api-client";
 
-export type SocialNetwork = "linkedin" | "facebook" | "instagram" | "x";
+export type SocialNetwork = "linkedin" | "facebook" | "instagram";
 
 export interface SocialConnection {
   id: string;

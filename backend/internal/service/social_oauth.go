@@ -69,15 +69,7 @@ func NewSocialOAuthService(social *SocialService) *SocialOAuthService {
 
 func (s *SocialOAuthService) StartAuthorization(ctx context.Context, userID, network string) (string, error) {
 	network = normalizeSocialNetwork(network)
-	codeVerifier := ""
-	if network == SocialNetworkX {
-		var err error
-		codeVerifier, err = generatePKCEVerifier()
-		if err != nil {
-			return "", err
-		}
-	}
-	state, err := s.signStateWithVerifier(userID, network, codeVerifier)
+	state, err := s.signStateWithVerifier(userID, network, "")
 	if err != nil {
 		return "", err
 	}
@@ -120,20 +112,6 @@ func (s *SocialOAuthService) StartAuthorization(ctx context.Context, userID, net
 			"business_management",
 		}, ","))
 		return "https://www.facebook.com/v25.0/dialog/oauth?" + query.Encode(), nil
-	case SocialNetworkX:
-		clientID := strings.TrimSpace(os.Getenv("X_CLIENT_ID"))
-		if clientID == "" {
-			return "", missingOAuthConfig("x", "X_CLIENT_ID")
-		}
-		query := url.Values{}
-		query.Set("response_type", "code")
-		query.Set("client_id", clientID)
-		query.Set("redirect_uri", s.callbackURL(network))
-		query.Set("scope", "tweet.read tweet.write users.read media.write offline.access")
-		query.Set("state", state)
-		query.Set("code_challenge", pkceS256Challenge(codeVerifier))
-		query.Set("code_challenge_method", "S256")
-		return "https://x.com/i/oauth2/authorize?" + query.Encode(), nil
 	default:
 		return "", ErrInvalidNetwork
 	}
@@ -161,11 +139,6 @@ func (s *SocialOAuthService) HandleCallback(ctx context.Context, network, code, 
 		}
 		message := fmt.Sprintf("Meta conectado: %d conta(s)", connected)
 		return s.successRedirect(SocialNetworkFacebook, message), nil
-	case SocialNetworkX:
-		if err := s.completeXOAuth(ctx, payload.UserID, code, payload.CodeVerifier); err != nil {
-			return s.errorRedirect(network, err.Error()), err
-		}
-		return s.successRedirect(network, "X conectado com sucesso"), nil
 	default:
 		return s.errorRedirect(network, ErrInvalidNetwork.Error()), ErrInvalidNetwork
 	}
